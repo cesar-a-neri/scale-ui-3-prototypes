@@ -1,0 +1,269 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-20: var(--destructive-20);
+  --color-destructive-30: var(--destructive-30);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Thematic Contract: Tailwind v4 namespace prefixes */
+  /* --radius-* → rounded-* | --spacing-* → p-*, m-*, gap-*, h-*, w-* */
+  /* --font-size-* → text-* | --font-weight-* → font-* */
+  --radius-button: var(--radius-button, 8px);
+  --radius-input: var(--radius-input, 8px);
+  --radius-card: var(--radius-card, 14px);
+  --radius-dialog: var(--radius-dialog, 14px);
+  --spacing-button-x: var(--spacing-button-x, 16px);
+  --spacing-button-y: var(--spacing-button-y, 8px);
+  --spacing-input-x: var(--spacing-input-x, 12px);
+  --spacing-card: var(--spacing-card, 24px);
+  --spacing-card-sm: var(--spacing-card-sm, 16px);
+  --spacing-label: var(--spacing-label, 8px);
+  --font-size-label: var(--font-size-label, 14px);
+  --font-weight-button: var(--font-weight-button, 500);
+}
+
+/* Thematic Contract: Custom utilities for component spacing */
+@utility px-button-x {
+  padding-left: var(--spacing-button-x);
+  padding-right: var(--spacing-button-x);
+}
+
+@utility py-button-y {
+  padding-top: var(--spacing-button-y);
+  padding-bottom: var(--spacing-button-y);
+}
+
+@utility px-input-x {
+  padding-left: var(--spacing-input-x);
+  padding-right: var(--spacing-input-x);
+}
+
+@utility p-card {
+  padding: var(--spacing-card);
+}
+
+@utility py-card {
+  padding-top: var(--spacing-card);
+  padding-bottom: var(--spacing-card);
+}
+
+@utility px-card {
+  padding-left: var(--spacing-card);
+  padding-right: var(--spacing-card);
+}
+
+@utility gap-card {
+  gap: var(--spacing-card);
+}
+
+@utility p-card-sm {
+  padding: var(--spacing-card-sm);
+}
+
+@utility py-card-sm {
+  padding-top: var(--spacing-card-sm);
+  padding-bottom: var(--spacing-card-sm);
+}
+
+@utility px-card-sm {
+  padding-left: var(--spacing-card-sm);
+  padding-right: var(--spacing-card-sm);
+}
+
+@utility gap-card-sm {
+  gap: var(--spacing-card-sm);
+}
+
+@utility gap-label {
+  gap: var(--spacing-label);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.58 0.22 27);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  /* Button variant defaults */
+  --btn-outline-border: var(--border);
+  --btn-outline-text: var(--foreground);
+
+  /* Thematic Contract: Tokens not in Shadcn base (themes override at runtime) */
+  --destructive-foreground: oklch(0.577 0.245 27.325);
+  --destructive-20: oklch(0.577 0.245 27.325 / 10%);
+  --destructive-30: oklch(0.577 0.245 27.325 / 20%);
+  --warning: oklch(0.646 0.222 41.116);
+  --warning-foreground: oklch(0.274 0.097 46.568);
+  --radius-button: 8px;
+  --radius-dialog: 12px;
+  --radius-card: 12px;
+  --radius-input: 8px;
+  --spacing-0: 0;
+  --spacing-4xs: 2px;
+  --spacing-3xs: 4px;
+  --spacing-2xs: 6px;
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --btn-shadow: none;
+  --btn-shadow-hover: none;
+
+  /* Falcon domain palette — light */
+  --falcon-sev-failed-fg: #b91c1c;   --falcon-sev-failed-bg: #fef2f2;   --falcon-sev-failed-bd: #fecaca;   --falcon-sev-failed-dot: #ef4444;   --falcon-sev-failed-tint: #fef8f8;   --falcon-sev-failed-hover: #fdf3f3;
+  --falcon-sev-degraded-fg: #b45309; --falcon-sev-degraded-bg: #fffbeb; --falcon-sev-degraded-bd: #fde68a; --falcon-sev-degraded-dot: #f59e0b; --falcon-sev-degraded-tint: #fffdf5; --falcon-sev-degraded-hover: #fefaed;
+  --falcon-sev-stale-fg: #475569;    --falcon-sev-stale-bg: #f8fafc;    --falcon-sev-stale-bd: #e2e8f0;    --falcon-sev-stale-dot: #64748b;    --falcon-sev-stale-tint: #fcfdfe;    --falcon-sev-stale-hover: #f7f9fb;
+  --falcon-sev-healthy-fg: #52525b;  --falcon-sev-healthy-bg: #fafafa;  --falcon-sev-healthy-bd: #e4e4e7;  --falcon-sev-healthy-dot: #a1a1aa;  --falcon-sev-healthy-tint: transparent; --falcon-sev-healthy-hover: #fafafa;
+  --falcon-pack-deployed-fg: #15803d;    --falcon-pack-deployed-bg: #f0fdf4;    --falcon-pack-deployed-bd: #bbf7d0;    --falcon-pack-deployed-dot: #16a34a;
+  --falcon-pack-progressing-fg: #b45309; --falcon-pack-progressing-bg: #fffbeb; --falcon-pack-progressing-bd: #fde68a; --falcon-pack-progressing-dot: #f59e0b;
+  --falcon-pack-crash-fg: #b91c1c;       --falcon-pack-crash-bg: #fef2f2;       --falcon-pack-crash-bd: #fecaca;       --falcon-pack-crash-dot: #ef4444;
+  --falcon-pack-unknown-fg: #475569;     --falcon-pack-unknown-bg: #f8fafc;     --falcon-pack-unknown-bd: #e2e8f0;     --falcon-pack-unknown-dot: #64748b;
+  --falcon-tier-p0-bg: #18181b; --falcon-tier-p0-fg: #fafafa;
+  --falcon-tier-p1-bg: #a1a1aa; --falcon-tier-p1-fg: #fafafa;
+  --falcon-tier-p2-bg: #e4e4e7; --falcon-tier-p2-fg: #3f3f46;
+  --falcon-hatch-bg: #bababa;
+  --falcon-hatch-pattern: url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'5.657'%20height%3D'5.657'%20shape-rendering%3D'geometricPrecision'%3E%3Cpath%20d%3D'M-1%2C1%20L1%2C-1%20M0%2C5.657%20L5.657%2C0%20M4.657%2C6.657%20L6.657%2C4.657'%20stroke%3D'%23666666'%20stroke-width%3D'1.6'%2F%3E%3C%2Fsvg%3E");
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.87 0.00 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.371 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+
+  /* Button variant defaults */
+  --btn-outline-border: var(--input);
+  --btn-outline-text: var(--foreground);
+
+  /* Thematic Contract: Tokens not in Shadcn base (themes override at runtime) */
+  --destructive-foreground: oklch(0.704 0.191 22.216);
+  --destructive-20: oklch(0.704 0.191 22.216 / 20%);
+  --destructive-30: oklch(0.704 0.191 22.216 / 30%);
+  --warning: oklch(0.356 0.105 46.568);
+  --warning-foreground: oklch(0.969 0.015 73.684);
+  --btn-shadow: none;
+  --btn-shadow-hover: none;
+
+  /* Falcon domain palette — dark */
+  --falcon-sev-failed-fg: #fca5a5;   --falcon-sev-failed-bg: #450a0a;   --falcon-sev-failed-bd: #7f1d1d;   --falcon-sev-failed-dot: #ef4444;   --falcon-sev-failed-tint: #1f0a0c;   --falcon-sev-failed-hover: #2a1416;
+  --falcon-sev-degraded-fg: #fcd34d; --falcon-sev-degraded-bg: #451a03; --falcon-sev-degraded-bd: #92400e; --falcon-sev-degraded-dot: #f59e0b; --falcon-sev-degraded-tint: #1c1308; --falcon-sev-degraded-hover: #2a1f12;
+  --falcon-sev-stale-fg: #94a3b8;    --falcon-sev-stale-bg: #1e293b;    --falcon-sev-stale-bd: #334155;    --falcon-sev-stale-dot: #64748b;    --falcon-sev-stale-tint: #13182b;    --falcon-sev-stale-hover: #1c2238;
+  --falcon-sev-healthy-fg: #a1a1aa;  --falcon-sev-healthy-bg: #1f1f23;  --falcon-sev-healthy-bd: #3f3f46;  --falcon-sev-healthy-dot: #71717a;  --falcon-sev-healthy-tint: transparent; --falcon-sev-healthy-hover: #27272a;
+  --falcon-pack-deployed-fg: #86efac;    --falcon-pack-deployed-bg: #052e16;    --falcon-pack-deployed-bd: #14532d;    --falcon-pack-deployed-dot: #16a34a;
+  --falcon-pack-progressing-fg: #fcd34d; --falcon-pack-progressing-bg: #451a03; --falcon-pack-progressing-bd: #92400e; --falcon-pack-progressing-dot: #f59e0b;
+  --falcon-pack-crash-fg: #fca5a5;       --falcon-pack-crash-bg: #450a0a;       --falcon-pack-crash-bd: #7f1d1d;       --falcon-pack-crash-dot: #ef4444;
+  --falcon-pack-unknown-fg: #94a3b8;     --falcon-pack-unknown-bg: #1e293b;     --falcon-pack-unknown-bd: #334155;     --falcon-pack-unknown-dot: #64748b;
+  --falcon-tier-p0-bg: #fafafa; --falcon-tier-p0-fg: #18181b;
+  --falcon-tier-p1-bg: #71717a; --falcon-tier-p1-fg: #fafafa;
+  --falcon-tier-p2-bg: #3f3f46; --falcon-tier-p2-fg: #d4d4d8;
+  --falcon-hatch-bg: #3f3f46;
+  --falcon-hatch-pattern: url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'5.657'%20height%3D'5.657'%20shape-rendering%3D'geometricPrecision'%3E%3Cpath%20d%3D'M-1%2C1%20L1%2C-1%20M0%2C5.657%20L5.657%2C0%20M4.657%2C6.657%20L6.657%2C4.657'%20stroke%3D'%23a1a1aa'%20stroke-width%3D'1.6'%2F%3E%3C%2Fsvg%3E");
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
