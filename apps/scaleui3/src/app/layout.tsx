@@ -6,8 +6,8 @@ import { DevTools } from '@proto/devtools/react';
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: 'Proto Platform — ScaleUI3',
-  description: 'ScaleUI3 prototype app with a shared ⌘K command palette.',
+  title: 'Scale UI 3 Prototypes',
+  description: 'ScaleUI3 prototypes with a shared ⌘K command palette.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
