@@ -47,9 +47,15 @@ export function NavShell({ section, items = FALCON_NAV_ITEMS, onNavigate, childr
                     type="button"
                     onClick={() => onNavigate('fleet')}
                     aria-label="Falcon — go to Fleet"
-                    className="bg-primary focus-visible:ring-ring mr-6 flex cursor-pointer items-center border-0 px-4 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+                    className="focus-visible:ring-ring mr-2 flex cursor-pointer items-center border-0 bg-transparent pr-4 pl-8 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
                 >
-                    <span aria-hidden="true" className="bg-primary-foreground size-4 rounded-full" />
+                    <img
+                        src="/falcon-logo.svg"
+                        alt=""
+                        aria-hidden="true"
+                        className="size-6 select-none dark:invert"
+                        draggable={false}
+                    />
                 </button>
 
                 <nav aria-label="Primary" className="flex items-center gap-1">
