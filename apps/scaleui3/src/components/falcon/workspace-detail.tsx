@@ -30,7 +30,7 @@ import {
 } from './lib';
 import { falconData, fCustomer, fCloudName, fStaleness, fSgpChannel } from './data';
 import { FalconLoading, FalconEmpty, FalconError, type ViewState } from './states';
-import type { Deployment, Workspace } from './types';
+import type { Deployment, HealthBucket, Workspace } from './types';
 
 interface WorkspaceDetailProps {
     workspaceId: string;
@@ -61,6 +61,15 @@ const STATUS_TO_HEALTH: Record<string, PackGroup['health']> = {
     Progressing: 'Degraded',
     CrashLoopBackOff: 'Failed',
     Unknown: 'Unknown',
+};
+
+// Map pack health → severity bucket so rows/cards can pick up the same
+// semantic tints used on the Fleet Health Overview. (mirrors ShadHealthPill)
+const HEALTH_BUCKET: Record<PackGroup['health'], HealthBucket> = {
+    Healthy: 'healthy',
+    Degraded: 'degraded',
+    Failed: 'failed',
+    Unknown: 'stale',
 };
 
 function shadPackGroups(ds: Deployment[], wsId: string): PackGroup[] {
@@ -285,6 +294,7 @@ function PacksTab({
     setPackQuery: (s: string) => void;
 }) {
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
+    const [hoveredPack, setHoveredPack] = useState<string | null>(null);
     const groups = shadPackGroups(ds, wsId).filter(
         (g) =>
             !packQuery ||
@@ -347,12 +357,20 @@ function PacksTab({
                         {groups.map((g) => {
                             const isOpen = expanded.has(g.pack) || !!packQuery;
                             const cellBase = 'py-3 h-[42px] box-border';
+                            const bucket = HEALTH_BUCKET[g.health];
+                            const isHovered = hoveredPack === g.pack;
                             return (
                                 <React.Fragment key={g.pack}>
                                     <TableRow
-                                        className="hover:bg-muted/50 cursor-pointer"
+                                        className="cursor-pointer"
                                         onClick={() => toggle(g.pack)}
                                         aria-expanded={isOpen}
+                                        onMouseEnter={() => setHoveredPack(g.pack)}
+                                        onMouseLeave={() => setHoveredPack(null)}
+                                        style={{
+                                            background: isHovered ? SHAD_SEV[bucket].hover : SHAD_SEV[bucket].tint,
+                                            transition: 'background 0.1s',
+                                        }}
                                     >
                                         <TableCell className={cn(cellBase, 'font-mono font-medium')}>
                                             <span className="flex items-center gap-1.5">
@@ -433,10 +451,15 @@ function WorkloadsCards({ wls, health }: { wls: Workload[]; health: PackGroup['h
         <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 lg:grid-cols-4">
             {wls.map((wl, j) => {
                 const mark = wlMark(health, j);
+                const markSev = mark ? SHAD_SEV[mark === 'Failed' ? 'failed' : 'degraded'] : null;
                 return (
                 <div
                     key={wl.workload + j}
-                    className="border-border bg-card flex flex-col gap-2.5 rounded-lg border p-3 shadow-sm"
+                    className={cn(
+                        'flex flex-col gap-2.5 rounded-lg border p-3 shadow-sm',
+                        !markSev && 'border-border bg-card',
+                    )}
+                    style={markSev ? { background: markSev.tint, borderColor: markSev.bd } : undefined}
                 >
                     <div className="flex items-center justify-between gap-2">
                         <span className="flex items-center gap-1.5 font-mono text-xs font-medium">
