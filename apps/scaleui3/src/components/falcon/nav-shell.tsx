@@ -42,7 +42,7 @@ export interface NavShellProps {
 export function NavShell({ section, items = FALCON_NAV_ITEMS, onNavigate, children }: NavShellProps) {
     return (
         <div className="flex h-full w-full flex-col">
-            <header className="bg-card border-border flex h-12 shrink-0 items-stretch border-b pr-6">
+            <header className="bg-card border-border flex h-14 shrink-0 items-stretch border-b pr-6">
                 <button
                     type="button"
                     onClick={() => onNavigate('fleet')}

@@ -7,9 +7,17 @@ export default function HomePage() {
       <p className="text-muted-foreground">
         Press <kbd className="rounded border px-1.5 py-0.5 text-sm">⌘K</kbd> to open the prototype switcher.
       </p>
-      <Link href="/falcon" className="text-primary underline underline-offset-4">
-        Open Project Falcon →
-      </Link>
+      <div className="flex flex-col gap-2">
+        <Link href="/falcon" className="text-primary underline underline-offset-4">
+          Open Project Falcon →
+        </Link>
+        <Link href="/sgp-nav" className="text-primary underline underline-offset-4">
+          Open SGP Navigation IA →
+        </Link>
+        <Link href="/golden-agent" className="text-primary underline underline-offset-4">
+          Open Golden Agent →
+        </Link>
+      </div>
     </main>
   );
 }

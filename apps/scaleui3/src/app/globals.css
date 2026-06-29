@@ -63,6 +63,22 @@
   --spacing-label: var(--spacing-label, 8px);
   --font-size-label: var(--font-size-label, 14px);
   --font-weight-button: var(--font-weight-button, 500);
+
+  /* Radix Colors gray 12-point scale (light) — used by the sgp-nav prototype,
+     which was authored against Radix's `gray-1`..`gray-12` utility classes.
+     Additive: does not collide with Tailwind's built-in gray-50..gray-950. */
+  --color-gray-1: #fcfcfc;
+  --color-gray-2: #f9f9f9;
+  --color-gray-3: #f0f0f0;
+  --color-gray-4: #e8e8e8;
+  --color-gray-5: #e0e0e0;
+  --color-gray-6: #d9d9d9;
+  --color-gray-7: #cecece;
+  --color-gray-8: #bbbbbb;
+  --color-gray-9: #8d8d8d;
+  --color-gray-10: #838383;
+  --color-gray-11: #646464;
+  --color-gray-12: #202020;
 }
 
 /* Thematic Contract: Custom utilities for component spacing */
