@@ -611,7 +611,7 @@ const Integrations = ({ connected, onToggle }: { connected: string[]; onToggle: 
           return (
             <div key={intg.id}
               className="flex items-center gap-3 px-4 py-3 rounded-md border transition-all"
-              style={{ borderColor: '#D1DAEB', backgroundColor: '#fff' }}>
+              style={{ borderColor: on ? '#D1DAEB' : '#EAECF2', backgroundColor: '#fff' }}>
               <div className="w-8 h-8 rounded-lg border border-[#E8ECF2] bg-white flex items-center justify-center shrink-0"
                 style={{ opacity: on ? 1 : 0.4 }}>
                 <IntegrationLogo id={intg.id} size={18} />
