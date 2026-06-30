@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTweakpane } from '@proto/devtools/react';
 import AgentexCICD from '@/components/agentex-cicd/agentex-cicd';
 import { CustomizableAgents } from '@/components/agentex-cicd/customizable-agents';
+import { downloadGoldenAgentHandoff } from '@/components/agentex-cicd/handoff/downloadHandoff';
 import { NavV3, ShowIconsContext, ShowDescriptionsContext } from '@/components/sgp-nav/sgp-nav';
 
 const PURPLE = { accent: '#714DFF', tint: '#F5F3FF', muted: '#EDE9FE', text: '#4C3AE3', soft: '#5746d4' };
@@ -10,6 +12,19 @@ const PURPLE = { accent: '#714DFF', tint: '#F5F3FF', muted: '#EDE9FE', text: '#4
 export default function GoldenAgentPage() {
   const [view, setView] = useState<'command-center' | 'agents'>('command-center');
   const [commandAgentName, setCommandAgentName] = useState<string | null>(null);
+
+  // Prototyping harness. `alwaysVisible` keeps the panel (and the handoff
+  // "Download .zip" button) shown regardless of dev mode — same pattern as Falcon.
+  useTweakpane(
+    {},
+    {},
+    {
+      alwaysVisible: true,
+      buttons: [
+        { title: 'Download .zip', label: 'Handoff', onClick: downloadGoldenAgentHandoff },
+      ],
+    },
+  );
 
   const handleAgentSelect = (name: string) => { setCommandAgentName(name); setView('command-center'); };
   const handleBack = () => setView('agents');

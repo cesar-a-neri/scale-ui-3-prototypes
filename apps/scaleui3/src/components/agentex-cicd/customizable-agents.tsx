@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Save, X, Clock,
   Lock, Shield, Terminal, Zap, Bot,
@@ -9,7 +10,7 @@ import {
   Copy, MessagesSquare, SquarePen, MoreHorizontal, Search,
   PanelLeftClose, PanelLeftOpen, Pencil, Trash2, SlidersHorizontal, PanelLeft, ArrowUp, Box, ChevronDown,
   Heading1, Heading2, Heading3, Bold, Italic, List, ListOrdered, Code, Quote, Minus, Table, ChevronDown as ChevronDownSm,
-  Maximize2, ArrowLeft,
+  Maximize2, ArrowLeft, Check,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -345,17 +346,27 @@ const SystemInstructions = ({ value, onChange, rows = 9 }: { value: string; onCh
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <FormLabel>System Instructions</FormLabel>
-        <div className="flex items-center p-[2px] rounded-md text-[11px]"
-          style={{ border: '1px solid #e9e9eb', background: '#f5f7fa' }}>
-          {(['edit', 'preview'] as const).map(m => (
-            <button key={m} type="button" onClick={() => setMode(m)}
-              className="px-2 h-[20px] rounded transition-all capitalize"
-              style={mode === m
-                ? { background: ACCENT_MUTED, color: ACCENT_SOFT, fontWeight: 600 }
-                : { background: 'transparent', color: '#78839c', fontWeight: 400 }}>
-              {m}
-            </button>
-          ))}
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center p-[2px] rounded-md text-[11px]"
+            style={{ border: '1px solid #e9e9eb', background: '#f5f7fa' }}>
+            {(['edit', 'preview'] as const).map(m => (
+              <button key={m} type="button" onClick={() => setMode(m)}
+                className="px-2 h-[20px] rounded transition-all capitalize"
+                style={mode === m
+                  ? { background: ACCENT_MUTED, color: ACCENT_SOFT, fontWeight: 600 }
+                  : { background: 'transparent', color: '#78839c', fontWeight: 400 }}>
+                {m}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            title="Expand editor"
+            onMouseDown={e => { e.preventDefault(); setExpanded(true); }}
+            className="flex items-center justify-center w-6 h-6 rounded text-[#818EA9] hover:text-[#19202F] hover:bg-[#F0F0F3] transition-colors"
+          >
+            <Maximize2 size={12} />
+          </button>
         </div>
       </div>
       {mode === 'edit' ? (
@@ -400,14 +411,6 @@ const SystemInstructions = ({ value, onChange, rows = 9 }: { value: string; onCh
             <div className="w-px h-4 mx-1 bg-[#D1DAEB]" />
             {miscTools.map(toolBtn)}
           </div>
-            <button
-              type="button"
-              title="Expand editor"
-              onMouseDown={e => { e.preventDefault(); setExpanded(true); }}
-              className="flex items-center justify-center w-6 h-6 rounded text-[#818EA9] hover:text-[#19202F] hover:bg-[#F0F0F3] transition-colors ml-1"
-            >
-              <Maximize2 size={12} />
-            </button>
           </div>
           <textarea
             ref={taRef}
@@ -421,9 +424,9 @@ const SystemInstructions = ({ value, onChange, rows = 9 }: { value: string; onCh
         </div>
       ) : (
         <div
-          className="w-full px-3 py-2.5 rounded-md border border-[#D1DAEB] text-[13px] leading-[1.7] text-[#19202F] bg-white"
-          style={{ minHeight: `${rows * 1.7 * 13 + 20}px` }}>
-          <ReactMarkdown components={PREVIEW_COMPONENTS as never}>{value || '*No instructions yet.*'}</ReactMarkdown>
+          className="w-full px-3 py-2.5 rounded-md border border-[#D1DAEB] text-[13px] leading-[1.7] text-[#19202F] bg-white overflow-y-auto"
+          style={{ minHeight: `${rows * 1.7 * 13 + 20}px`, maxHeight: `${(rows * 1.7 * 13 + 20) * 1.3}px` }}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={PREVIEW_COMPONENTS as never}>{value || '*No instructions yet.*'}</ReactMarkdown>
         </div>
       )}
 
@@ -502,7 +505,7 @@ const SystemInstructions = ({ value, onChange, rows = 9 }: { value: string; onCh
                 />
               ) : (
                 <div className="h-full overflow-y-auto px-5 py-4 text-[13px] leading-[1.7] text-[#19202F]">
-                  <ReactMarkdown components={PREVIEW_COMPONENTS as never}>{value || '*No instructions yet.*'}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={PREVIEW_COMPONENTS as never}>{value || '*No instructions yet.*'}</ReactMarkdown>
                 </div>
               )}
             </div>
@@ -696,9 +699,21 @@ const VersionHistory = () => {
 
 const ChatPlayground = ({ messages = MOCK_MESSAGES }: { messages?: ChatMessage[] }) => {
   const [input, setInput] = useState('');
+  const [singleLine, setSingleLine] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView(); }, [messages]);
+
+  // Auto-grow the input from a single line up to a max height as content wraps.
+  useEffect(() => {
+    const ta = inputRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
+    // leading-6 == 24px line height; one row stays within ~30px.
+    setSingleLine(ta.scrollHeight <= 30);
+  }, [input]);
 
   const canSend = input.trim().length > 0;
 
@@ -754,9 +769,10 @@ const ChatPlayground = ({ messages = MOCK_MESSAGES }: { messages?: ChatMessage[]
             return (
               <div key={msg.id} className="flex flex-col items-start gap-2">
                 <div className="text-[14px] font-normal leading-[1.8] max-w-none" style={{ color: '#19202f' }}>
-                  <ReactMarkdown components={{
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
                     p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
                     strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                    em: ({ children }) => <em className="italic">{children}</em>,
                     ul: ({ children }) => <ul className="list-disc pl-5 mb-3 flex flex-col gap-1">{children}</ul>,
                     ol: ({ children }) => <ol className="list-decimal pl-5 mb-3 flex flex-col gap-1">{children}</ol>,
                     li: ({ children }) => <li>{children}</li>,
@@ -764,6 +780,12 @@ const ChatPlayground = ({ messages = MOCK_MESSAGES }: { messages?: ChatMessage[]
                     h2: ({ children }) => <h2 className="text-[15px] font-semibold mb-2">{children}</h2>,
                     h3: ({ children }) => <h3 className="text-[14px] font-semibold mb-1">{children}</h3>,
                     code: ({ children }) => <code className="px-1 py-0.5 rounded text-[13px] font-mono" style={{ backgroundColor: '#f0f0f3' }}>{children}</code>,
+                    pre: ({ children }) => <pre className="px-3 py-2 rounded-md bg-[#f0f0f3] text-[13px] font-mono overflow-x-auto mb-3">{children}</pre>,
+                    blockquote: ({ children }) => <blockquote className="border-l-2 border-[#D1DAEB] pl-3 text-[#818EA9] italic mb-3">{children}</blockquote>,
+                    hr: () => <hr className="border-[#D1DAEB] my-3" />,
+                    table: ({ children }) => <table className="w-full text-[13px] border-collapse mb-3">{children}</table>,
+                    th: ({ children }) => <th className="border border-[#D1DAEB] px-2 py-1 text-left font-semibold bg-[#f5f7fa]">{children}</th>,
+                    td: ({ children }) => <td className="border border-[#D1DAEB] px-2 py-1">{children}</td>,
                   }}>{msg.content}</ReactMarkdown>
                 </div>
               </div>
@@ -775,18 +797,17 @@ const ChatPlayground = ({ messages = MOCK_MESSAGES }: { messages?: ChatMessage[]
 
       {/* Input */}
       <div className="py-5 max-w-[640px] mx-auto w-full px-8">
-        <div className="relative bg-white rounded-lg" style={{ border: '1px solid #e9e9eb', boxShadow: '0px 3px 15px 0px rgba(0,0,0,0.15)' }}>
-          <div className="min-h-[74px] pt-4 pl-4 pr-3 pb-2">
+        <div className={cn('relative bg-white transition-[border-radius]', singleLine ? 'rounded-full' : 'rounded-lg')} style={{ border: '1px solid #e9e9eb', boxShadow: '0px 3px 15px 0px rgba(0,0,0,0.15)' }}>
+          <div className="flex items-end gap-2 pt-3 pb-3 pl-4 pr-3">
             <textarea
-              rows={3}
+              ref={inputRef}
+              rows={1}
               value={input}
               onChange={e => setInput(e.target.value)}
               placeholder="Send a message to test your agent…"
-              className="w-full resize-none bg-transparent text-[14px] font-normal leading-5 outline-none placeholder:font-normal"
+              className="flex-1 min-w-0 resize-none bg-transparent text-[14px] font-normal leading-6 outline-none placeholder:font-normal block"
               style={{ color: '#19202f', caretColor: '#19202f', maxHeight: '160px' }}
             />
-          </div>
-          <div className="flex items-center justify-end h-12 pl-4 pr-3">
             <button type="button" disabled={!canSend}
               className="flex items-center justify-center w-6 h-6 rounded-full transition-all flex-shrink-0"
               style={canSend ? { backgroundColor: ACCENT, color: '#fff' } : { backgroundColor: '#f0f0f3', color: '#818ea9' }}>
@@ -794,7 +815,7 @@ const ChatPlayground = ({ messages = MOCK_MESSAGES }: { messages?: ChatMessage[]
             </button>
           </div>
           {/* Inset shadow overlay */}
-          <div className="absolute inset-0 pointer-events-none rounded-lg"
+          <div className={cn('absolute inset-0 pointer-events-none', singleLine ? 'rounded-full' : 'rounded-lg')}
             style={{ boxShadow: 'inset 0px 0px 2px 0px rgba(0,0,0,0.1), inset 0px 0px 2px 0px rgba(0,96,255,0.03)' }} />
         </div>
       </div>
@@ -874,6 +895,7 @@ const CombinedSidebar = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const agentPickerRef = useRef<HTMLDivElement>(null);
 
   const filtered = threads.filter(t =>
     t.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -902,6 +924,15 @@ const CombinedSidebar = ({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [openMenuId]);
+
+  useEffect(() => {
+    if (!agentDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (agentPickerRef.current && !agentPickerRef.current.contains(e.target as Node)) setAgentDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [agentDropdownOpen]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -940,6 +971,13 @@ const CombinedSidebar = ({
   };
 
   const createThread = () => {
+    // Idempotent: reuse an existing empty "New Thread" instead of stacking duplicates.
+    const existing = threads.find(t => t.title === 'New Thread' && t.messages === 0);
+    if (existing) {
+      onSelect(existing.id);
+      onConfigClose?.();
+      return;
+    }
     const t = { id: Date.now().toString(), title: 'New Thread', preview: '', date: 'Now', messages: 0, active: false };
     setThreads(prev => [t, ...prev]);
     onSelect(t.id);
@@ -955,7 +993,7 @@ const CombinedSidebar = ({
 
         <div className="flex flex-col flex-1 overflow-hidden p-2">
           {/* Top bar */}
-          <div className="flex items-center h-10 px-1 gap-2 shrink-0 mb-1">
+          <div className={cn('flex items-center h-10 px-1 gap-2 shrink-0', onConfigOpen ? 'mt-2 mb-4' : 'mb-1')}>
             {onConfigOpen ? (
               <>
                 <button type="button" title="Back to agents"
@@ -963,24 +1001,28 @@ const CombinedSidebar = ({
                   className="w-8 h-8 rounded-md flex items-center justify-center shrink-0 text-[#818EA9] hover:text-[#19202F] hover:bg-[#EBEBEE] transition-colors">
                   <ArrowLeft size={15} />
                 </button>
-                <div className="flex-1 flex justify-center relative">
+                <div ref={agentPickerRef} className="flex-1 flex justify-center relative">
                   <button
                     type="button"
                     onClick={() => setAgentDropdownOpen(o => !o)}
-                    className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-[#EBEBEE] transition-colors max-w-full"
+                    className="flex items-center gap-1.5 max-w-full pl-4 pr-3 h-10 rounded-full bg-white transition-colors hover:bg-[#FAFAFB]"
+                    style={{ border: '1px solid #e9e9eb', boxShadow: '0px 1px 2px 0px rgba(0,0,0,0.05)' }}
                   >
-                    <span className="truncate text-[13px] font-medium text-[#19202F]">{agentName}</span>
-                    <ChevronDown size={12} className="shrink-0 text-[#818EA9]" />
+                    <span className="min-w-0 truncate text-left text-[14px] font-medium text-[#19202F]">{agentName}</span>
+                    <ChevronDown size={16} className="shrink-0 text-[#818EA9]" />
                   </button>
                   {agentDropdownOpen && (
-                    <div className="absolute top-full left-0 mt-1 z-50 bg-white rounded-lg border border-[#D1DAEB] shadow-lg py-1.5 min-w-[220px]"
-                      onMouseLeave={() => setAgentDropdownOpen(false)}>
+                    <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white rounded-xl border border-[#e9e9eb] py-2"
+                      style={{ boxShadow: '0px 8px 24px 0px rgba(0,0,0,0.12)' }}>
                       {MOCK_AGENTS.map(agent => (
                         <button key={agent.id} type="button"
                           onClick={() => { onSelectAgent(agent.id); setAgentDropdownOpen(false); }}
-                          className="flex flex-col items-start w-full px-4 py-2.5 text-left hover:bg-[#F5F5F8] transition-colors"
+                          className="flex flex-col items-start w-full px-3 py-2 text-left transition-colors hover:bg-[#F5F5F8]"
                           style={selectedAgentId === agent.id ? { backgroundColor: ACCENT_TINT } : {}}>
-                          <span className="text-[13px] font-medium text-[#19202F]">{agent.name}</span>
+                          <span className="flex items-center gap-2">
+                            <span className="truncate text-[14px] font-medium text-[#19202F]">{agent.name}</span>
+                            {selectedAgentId === agent.id && <Check size={16} className="shrink-0" style={{ color: ACCENT_SOFT }} />}
+                          </span>
                           <span className="text-[11px] text-[#818EA9] leading-snug mt-0.5">{agent.description}</span>
                         </button>
                       ))}
@@ -1032,7 +1074,7 @@ const CombinedSidebar = ({
               </button>
 
               {/* Expandable search */}
-              <div className="flex items-center h-10 px-2 shrink-0 overflow-hidden">
+              <div className="flex items-center h-10 px-2 shrink-0 overflow-hidden mt-3">
                 {!searchOpen ? (
                   <>
                     <span className="flex-1 truncate font-normal leading-6 text-[14px]" style={{ color: '#818EA9' }}>Threads</span>
@@ -1250,7 +1292,7 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
       {/* Chat — Primary Surface */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {!panel && (
-          <div className="px-1 h-10 flex items-center shrink-0 mb-1 mt-2">
+          <div className="px-3 h-10 flex items-center shrink-0 mb-1 mt-4">
             <button type="button" title="Panel"
               onClick={() => setPanel('sidebar')}
               className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 text-[#818EA9] hover:bg-[#F3F4F6]">
