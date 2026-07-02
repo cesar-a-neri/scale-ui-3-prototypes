@@ -10,9 +10,10 @@ import {
   Copy, MessagesSquare, SquarePen, MoreHorizontal, Search,
   PanelLeftClose, PanelLeftOpen, Pencil, Trash2, SlidersHorizontal, PanelLeft, ArrowUp, Box, ChevronDown,
   Heading1, Heading2, Heading3, Bold, Italic, List, ListOrdered, Code, Quote, Minus, Table, ChevronDown as ChevronDownSm,
-  Maximize2, ArrowLeft, Check,
+  Maximize2, ArrowLeft, Check, CalendarClock, TriangleAlert,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ScheduledTasks, type ScheduledVariant, type ScheduleFormError } from './scheduled-tasks';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -26,8 +27,11 @@ const ACCENT_SOFT  = 'var(--proto-accent-soft)';
 
 const THREADS = [
   { id: 't1', title: 'Enterprise AI trends 2025', preview: 'What are the top enterprise AI trends…', date: 'Today', messages: 3, active: true },
+  { id: 'st1', title: 'Daily Granola summary', preview: 'Check today\'s Granola notes and send…', date: 'Today, 5:00 PM', messages: 4, active: false, scheduled: true },
   { id: 't2', title: 'Competitor analysis: OpenAI vs Anthropic', preview: 'Summarize the key differences between…', date: 'Yesterday', messages: 7, active: false },
+  { id: 'st2', title: 'Morning PR status', preview: 'Summarize open pull requests that need…', date: 'Today, 9:00 AM', messages: 6, active: false, scheduled: true },
   { id: 't3', title: 'Market sizing for agentic platforms', preview: 'What\'s the estimated TAM for enterprise…', date: 'Jun 23', messages: 12, active: false },
+  { id: 'st3', title: 'Hourly support triage', preview: 'Classify new support tickets by severity…', date: '22 min ago', messages: 3, active: false, scheduled: true },
   { id: 't4', title: 'Regulatory landscape for AI in EU', preview: 'What compliance requirements apply to…', date: 'Jun 21', messages: 5, active: false },
   { id: 't5', title: 'Integration options with Salesforce', preview: 'How can we connect to Salesforce CRM…', date: 'Jun 20', messages: 9, active: false },
 ];
@@ -80,7 +84,7 @@ const MODELS = [
   { id: 'gemini-pro', label: 'Gemini 2.0 Pro', provider: 'Google', badge: '' },
 ];
 
-const IntegrationLogo = ({ id, size = 20 }: { id: string; size?: number }) => {
+export const IntegrationLogo = ({ id, size = 20 }: { id: string; size?: number }) => {
   if (id === 'slack') return (
     <svg width={size} height={size} viewBox="0 0 127 127" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M27.2 80c0 7.3-5.9 13.2-13.2 13.2C6.7 93.2.8 87.3.8 80c0-7.3 5.9-13.2 13.2-13.2h13.2V80zm6.6 0c0-7.3 5.9-13.2 13.2-13.2 7.3 0 13.2 5.9 13.2 13.2v33c0 7.3-5.9 13.2-13.2 13.2-7.3 0-13.2-5.9-13.2-13.2V80z" fill="#E01E5A"/>
@@ -119,7 +123,7 @@ const IntegrationLogo = ({ id, size = 20 }: { id: string; size?: number }) => {
   return <span className="text-[14px]">🔗</span>;
 };
 
-const INTEGRATIONS = [
+export const INTEGRATIONS = [
   { id: 'slack', label: 'Slack', desc: 'Send messages and monitor channels from your workspace' },
   { id: 'github', label: 'GitHub', desc: 'Read repos, create issues, and comment on pull requests' },
   { id: 'notion', label: 'Notion', desc: 'Read and write pages and databases in your workspace' },
@@ -173,7 +177,7 @@ const VERSIONS = [
 
 interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant' | 'tool';
+  role: 'user' | 'assistant' | 'tool' | 'error';
   content?: string;
   name?: string;
   query?: string;
@@ -216,10 +220,37 @@ const MOCK_MESSAGES_T5: ChatMessage[] = [
   { id: '3', role: 'assistant', content: 'There are three viable integration paths for connecting the research agent to Salesforce:\n\n**Option 1: Salesforce MCP Server**\nThe most direct path. Anthropic\'s Model Context Protocol supports Salesforce as a connector. The agent can query Account, Opportunity, and Contact objects natively as tools.\n- Pros: No middleware, low latency, supports real-time queries\n- Cons: Requires Salesforce Connected App setup and OAuth configuration\n\n**Option 2: Agentex Salesforce Tool**\nIf running on the Agentex harness, there\'s a pre-built Salesforce tool that wraps the REST API with automatic credential management.\n- Pros: Fastest to deploy, built-in retry logic\n- Cons: Read-only by default; write operations require additional permissions\n\n**Option 3: Zapier / Make.com Middleware**\nFor lighter integrations, a webhook-triggered Zap can push Salesforce context into the agent\'s system prompt on session start.\n- Pros: No-code, easy to maintain\n- Cons: Latency, limited to pre-defined fields\n\n**Recommendation:** Start with Option 2 (Agentex tool) for fastest time-to-value, then migrate to Option 1 once your team is comfortable with MCP configuration.\n\nWant me to draft the setup instructions for the Agentex Salesforce connector?' },
 ];
 
+// Scheduled-run threads — the "user" turn is the schedule's preset prompt,
+// fired automatically rather than typed by a person.
+const MOCK_MESSAGES_ST1: ChatMessage[] = [
+  { id: '1', role: 'user', content: "Check today's Granola notes, summarize key follow-ups, and send me a Slack DM." },
+  { id: '2', role: 'tool', name: 'Sandbox created', query: '6 tools', result: 'Worked for 1m 08s' },
+  { id: '3', role: 'assistant', content: "Here's your daily follow-up summary from today's Granola notes (3 meetings):\n\n**Acme Corp — Renewal sync**\n- Send updated pricing proposal by Thursday\n- Loop in legal on the revised MSA terms\n\n**Weekly eng standup**\n- Unblock the data pipeline migration (owner: Priya)\n- Decision needed on Postgres vs. ClickHouse by Friday\n\n**1:1 with Jordan**\n- Share the Q3 roadmap draft for feedback\n\n✅ I've sent this summary to you as a Slack DM. Want me to create calendar reminders for the time-sensitive items?" },
+];
+
+const MOCK_MESSAGES_ST2: ChatMessage[] = [
+  { id: '1', role: 'user', content: 'Summarize open pull requests that need my review and post the digest to #eng-standup.' },
+  { id: '2', role: 'tool', name: 'Sandbox created', query: '5 tools', result: 'Worked for 0m 52s' },
+  { id: '3', role: 'assistant', content: "You have **4 pull requests** awaiting your review:\n\n1. **#2841 — Add retry logic to schedule runner** _(feat/retries)_\n   +212 −38 · opened 6h ago by @priya · 2 approvals, waiting on you\n2. **#2839 — Fix timezone drift in cron parser** _(fix/tz-drift)_\n   +47 −12 · opened yesterday by @marcus · CI green\n3. **#2835 — Refactor tool registry** _(chore/registry)_\n   +530 −410 · opened 2d ago by @lena · 1 change requested\n4. **#2830 — Docs: scheduled tasks API** _(docs/scheduling)_\n   +88 −0 · opened 3d ago by @sam\n\n📣 Posted the digest to **#eng-standup**. #2841 has been waiting longest — want me to open it first?" },
+];
+
+// A scheduled run that fired and created this task, but the agent errored partway
+// through — the only execution failure the user can actually see (it lives in the
+// task/chat, same as any normal error).
+const MOCK_MESSAGES_ST3: ChatMessage[] = [
+  { id: '1', role: 'user', content: 'Classify new support tickets by severity and create Linear issues for anything P0 or P1.' },
+  { id: '2', role: 'tool', name: 'Sandbox created', query: '4 tools', result: 'Ran for 0m 41s' },
+  { id: '3', role: 'assistant', content: 'Pulled **9 new tickets** and classified them (1 P0, 2 P1, 4 P2, 2 P3). Creating Linear issues for the P0 and P1 items…' },
+  { id: '4', role: 'error', content: "**Run failed — Linear returned 401 (Unauthorized).**\n\nThe agent classified the tickets but couldn't create issues: the Linear connection token was rejected, so nothing was written. Reconnect Linear under Configure Agent and the next scheduled run will pick these up." },
+];
+
 const ALL_THREAD_MESSAGES: Record<string, ChatMessage[]> = {
   t1: MOCK_MESSAGES,
+  st1: MOCK_MESSAGES_ST1,
   t2: MOCK_MESSAGES_T2,
+  st2: MOCK_MESSAGES_ST2,
   t3: MOCK_MESSAGES_T3,
+  st3: MOCK_MESSAGES_ST3,
   t4: MOCK_MESSAGES_T4,
   t5: MOCK_MESSAGES_T5,
 };
@@ -766,6 +797,20 @@ const ChatPlayground = ({ messages = MOCK_MESSAGES }: { messages?: ChatMessage[]
                 </div>
               );
             }
+            if (msg.role === 'error') {
+              return (
+                <div key={msg.id} className="flex items-start gap-2.5 px-4 py-3 rounded-xl w-full"
+                  style={{ backgroundColor: '#FEF2F2', border: '1px solid #FADCDC' }}>
+                  <TriangleAlert size={15} className="shrink-0 mt-0.5" style={{ color: '#DC2626' }} />
+                  <div className="text-[13px] leading-[1.7]" style={{ color: '#7F1D1D' }}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                      p: ({ children }) => <p className="mb-1.5 last:mb-0">{children}</p>,
+                      strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                    }}>{msg.content}</ReactMarkdown>
+                  </div>
+                </div>
+              );
+            }
             return (
               <div key={msg.id} className="flex flex-col items-start gap-2">
                 <div className="text-[14px] font-normal leading-[1.8] max-w-none" style={{ color: '#19202f' }}>
@@ -858,9 +903,11 @@ const CombinedSidebar = ({
   connected, onToggle,
   selectedAgentId, onSelectAgent,
   onConfigOpen, onConfigClose, configOpen,
+  onScheduledOpen, scheduledOpen,
   hasChanges, onSave,
   sidebarBg = 'muted',
   onBack,
+  navSpacing = 20,
 }: {
   activeThread: string; onSelect: (id: string) => void; onClose: () => void;
   agentName: string; onAgentName: (v: string) => void;
@@ -874,10 +921,13 @@ const CombinedSidebar = ({
   onConfigOpen?: () => void;
   onConfigClose?: () => void;
   configOpen?: boolean;
+  onScheduledOpen?: () => void;
+  scheduledOpen?: boolean;
   hasChanges?: boolean;
   onSave?: () => void;
   sidebarBg?: 'muted' | 'white';
   onBack?: () => void;
+  navSpacing?: number;
 }) => {
   const [tab, setTab] = useState<'threads' | 'config'>('threads');
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
@@ -1060,12 +1110,12 @@ const CombinedSidebar = ({
 
           {/* ── Threads content ── */}
           {tab === 'threads' && (
-            <div className="flex-1 flex flex-col overflow-hidden gap-1">
+            <div className="flex-1 flex flex-col overflow-hidden">
               {/* New Thread */}
               <button
                 onClick={createThread}
                 className="flex items-center gap-2 h-10 px-2 rounded-md transition-colors text-sm shrink-0"
-                style={{ color: '#19202f' }}
+                style={{ color: '#19202f', marginTop: navSpacing }}
                 onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#F0F0F3')}
                 onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
@@ -1073,8 +1123,20 @@ const CombinedSidebar = ({
                 <span>New Thread</span>
               </button>
 
+              {/* Scheduled Tasks (fullpage mode) */}
+              {onScheduledOpen && (
+                <button type="button" onClick={onScheduledOpen}
+                  className="flex items-center gap-2 h-10 px-2 rounded-md transition-colors text-sm shrink-0"
+                  style={{ color: '#19202f', backgroundColor: scheduledOpen ? ACCENT_TINT : 'transparent' }}
+                  onMouseEnter={e => { if (!scheduledOpen) e.currentTarget.style.backgroundColor = '#F0F0F3'; }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = scheduledOpen ? ACCENT_TINT : 'transparent'; }}>
+                  <CalendarClock className="w-4 h-4 shrink-0" />
+                  Scheduled Tasks
+                </button>
+              )}
+
               {/* Expandable search */}
-              <div className="flex items-center h-10 px-2 shrink-0 overflow-hidden mt-3">
+              <div className="flex items-center h-10 px-2 shrink-0 overflow-hidden" style={{ marginTop: navSpacing }}>
                 {!searchOpen ? (
                   <>
                     <span className="flex-1 truncate font-normal leading-6 text-[14px]" style={{ color: '#818EA9' }}>Threads</span>
@@ -1107,18 +1169,27 @@ const CombinedSidebar = ({
               </div>
 
               {/* Thread list */}
-              <div className="overflow-y-auto flex flex-col gap-1 flex-1">
+              <div className="overflow-y-auto flex flex-col flex-1">
                 {filtered.length === 0 && (
                   <p className="text-center text-[13px] py-4" style={{ color: '#818ea9' }}>No threads found</p>
                 )}
-                {filtered.map(t => (
+                {filtered.map(t => {
+                  const scheduled = !!(t as { scheduled?: boolean }).scheduled;
+                  const isRenaming = renamingId === t.id;
+                  const isActive = activeThread === t.id && !configOpen && !scheduledOpen;
+                  const rowStyle: React.CSSProperties = isRenaming
+                    ? { backgroundColor: ACCENT_MUTED }
+                    : isActive
+                      ? { backgroundColor: ACCENT_TINT }
+                      : {};
+                  return (
                   <div key={t.id}
-                    onClick={() => { if (renamingId !== t.id) { onSelect(t.id); onConfigClose?.(); } }}
+                    onClick={() => { if (!isRenaming) { onSelect(t.id); onConfigClose?.(); } }}
                     className={cn('group relative flex items-center h-10 px-2 rounded-md text-sm shrink-0',
-                      renamingId === t.id ? 'cursor-default' : 'cursor-pointer hover:bg-[#F0F0F3]')}
-                    style={renamingId === t.id ? { backgroundColor: ACCENT_MUTED } : activeThread === t.id && !configOpen ? { backgroundColor: ACCENT_TINT } : {}}
+                      isRenaming ? 'cursor-default' : 'cursor-pointer hover:bg-[#F0F0F3]')}
+                    style={rowStyle}
                   >
-                    {renamingId === t.id ? (
+                    {isRenaming ? (
                       <input ref={renameInputRef} value={renameValue}
                         onChange={e => setRenameValue(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenamingId(null); }}
@@ -1136,17 +1207,25 @@ const CombinedSidebar = ({
                           style={{ color: '#818ea9' }}>
                           <MoreHorizontal className="w-3.5 h-3.5" />
                         </button>
+                        {/* Scheduled-run marker: muted trailing icon pinned to the far end (x-aligned
+                            with the Threads-row search icon); the actions button sits to its left on hover. */}
+                        {scheduled && (
+                          <span className="w-6 h-6 flex items-center justify-center shrink-0 ml-1">
+                            <CalendarClock className="w-3.5 h-3.5" style={{ color: '#9CA3AF' }} aria-label="Scheduled task" />
+                          </span>
+                        )}
                       </>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* ── Configure Agent button (fullpage mode) ── */}
+          {/* ── Footer nav: Configure Agent (fullpage mode) ── */}
           {onConfigOpen && (
-            <div className="shrink-0 pt-2 pb-1 border-t border-[#F3F4F6]">
+            <div className="shrink-0 pt-2 pb-1 border-t border-[#F3F4F6] flex flex-col gap-0.5">
               <button type="button" onClick={onConfigOpen}
                 className="flex items-center gap-2 h-10 px-2 rounded-md transition-colors text-sm w-full shrink-0"
                 style={{ color: '#19202f', backgroundColor: configOpen ? ACCENT_TINT : 'transparent' }}
@@ -1222,9 +1301,14 @@ const CombinedSidebar = ({
   );
 };
 
-const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, initialAgentName }: { configMode?: 'sidebar' | 'fullpage'; sidebarBg?: 'muted' | 'white'; onBack?: () => void; initialAgentName?: string | null }) => {
+const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, initialAgentName, scheduledVariant = 'list', scheduledEmptyState = false, onScheduledOpenChange, navSpacing = 20, scheduleFormError = 'none', onScheduleFormOpenChange }: { configMode?: 'sidebar' | 'fullpage'; sidebarBg?: 'muted' | 'white'; onBack?: () => void; initialAgentName?: string | null; scheduledVariant?: ScheduledVariant; scheduledEmptyState?: boolean; onScheduledOpenChange?: (open: boolean) => void; navSpacing?: number; scheduleFormError?: ScheduleFormError; onScheduleFormOpenChange?: (open: boolean) => void }) => {
   const [panel, setPanel] = useState<Panel>('sidebar');
   const [configOpen, setConfigOpen] = useState(false);
+  const [scheduledOpen, setScheduledOpen] = useState(false);
+
+  // Let the page know when the Scheduled Tasks surface is showing so it can
+  // scope Tweakpane params (e.g. the empty-state toggle) to this page.
+  useEffect(() => { onScheduledOpenChange?.(scheduledOpen); }, [scheduledOpen, onScheduledOpenChange]);
   const [activeThread, setActiveThread] = useState('t1');
   const [threadMessages] = useState<Record<string, ChatMessage[]>>(ALL_THREAD_MESSAGES);
   const [selectedAgentId, setSelectedAgentId] = useState(MOCK_AGENTS[0].id);
@@ -1277,15 +1361,18 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
         <CombinedSidebar
           activeThread={activeThread} onSelect={setActiveThread} onClose={() => setPanel(null)}
           {...configProps}
-          onConfigOpen={configMode === 'fullpage' ? () => setConfigOpen(true) : undefined}
-          onConfigClose={configMode === 'fullpage' ? () => setConfigOpen(false) : undefined}
+          onConfigOpen={configMode === 'fullpage' ? () => { setConfigOpen(true); setScheduledOpen(false); } : undefined}
+          onConfigClose={configMode === 'fullpage' ? () => { setConfigOpen(false); setScheduledOpen(false); } : undefined}
           configOpen={configOpen}
+          onScheduledOpen={configMode === 'fullpage' ? () => { setScheduledOpen(true); setConfigOpen(false); } : undefined}
+          scheduledOpen={scheduledOpen}
           hasChanges={hasChanges}
           onSave={handleSave}
           selectedAgentId={selectedAgentId}
           onSelectAgent={handleSelectAgent}
           sidebarBg={sidebarBg}
           onBack={onBack}
+          navSpacing={navSpacing}
         />
       )}
 
@@ -1301,8 +1388,17 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
           </div>
         )}
 
-        {/* Full-page config overlay (fullpage mode only) */}
-        {configMode === 'fullpage' && configOpen ? (
+        {/* Scheduled Tasks surface (fullpage mode only) */}
+        {scheduledOpen ? (
+          <ScheduledTasks
+            variant={scheduledVariant}
+            emptyState={scheduledEmptyState}
+            formError={scheduleFormError}
+            onFormOpenChange={onScheduleFormOpenChange}
+            connectedTools={connected}
+            onConfigureTools={() => { setConfigOpen(true); setScheduledOpen(false); }}
+          />
+        ) : configMode === 'fullpage' && configOpen ? (
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 overflow-y-auto">
               <div className="max-w-[640px] mx-auto px-8 pt-12 pb-6 flex flex-col gap-6">
@@ -1387,6 +1483,6 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
 
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
-export function CustomizableAgents({ configMode = 'fullpage', sidebarBg = 'muted', onBack, initialAgentName }: { configMode?: 'sidebar' | 'fullpage'; sidebarBg?: 'muted' | 'white'; onBack?: () => void; initialAgentName?: string | null }) {
-  return <CommandCenter configMode={configMode} sidebarBg={sidebarBg} onBack={onBack} initialAgentName={initialAgentName} />;
+export function CustomizableAgents({ configMode = 'fullpage', sidebarBg = 'muted', onBack, initialAgentName, scheduledVariant = 'list', scheduledEmptyState = false, onScheduledOpenChange, navSpacing = 20, scheduleFormError = 'none', onScheduleFormOpenChange }: { configMode?: 'sidebar' | 'fullpage'; sidebarBg?: 'muted' | 'white'; onBack?: () => void; initialAgentName?: string | null; scheduledVariant?: ScheduledVariant; scheduledEmptyState?: boolean; onScheduledOpenChange?: (open: boolean) => void; navSpacing?: number; scheduleFormError?: ScheduleFormError; onScheduleFormOpenChange?: (open: boolean) => void }) {
+  return <CommandCenter configMode={configMode} sidebarBg={sidebarBg} onBack={onBack} initialAgentName={initialAgentName} scheduledVariant={scheduledVariant} scheduledEmptyState={scheduledEmptyState} onScheduledOpenChange={onScheduledOpenChange} navSpacing={navSpacing} scheduleFormError={scheduleFormError} onScheduleFormOpenChange={onScheduleFormOpenChange} />;
 }

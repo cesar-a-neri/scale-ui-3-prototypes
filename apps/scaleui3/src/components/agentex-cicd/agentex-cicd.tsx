@@ -27,12 +27,14 @@ import {
   Wand2,
   RotateCw,
   CircleArrowUp,
+  Sparkle,
 } from 'lucide-react';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { NavV3, ShowIconsContext, ShowDescriptionsContext } from '@/components/sgp-nav/sgp-nav';
 import { cn } from '@/lib/utils';
 import { MOCK_AGENTS } from '@/components/agentex-cicd/customizable-agents';
+import { ScheduledTasks } from '@/components/agentex-cicd/scheduled-tasks';
 
 const GithubIcon = ({ size = 16, className }: { size?: number; className?: string }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
@@ -108,7 +110,7 @@ const ElapsedTime = ({ startedAt }: { startedAt: number }) => {
 
 // ─── Agent Card Data ──────────────────────────────────────────────────────────
 
-interface Agent {
+export interface Agent {
   id: string;
   source: string;
   name: string;
@@ -1226,7 +1228,7 @@ function getBuildHistoryForAgent(agent: Agent, isScale: boolean): DeployHistoryR
   }
 }
 
-const AgentDetailView = ({ agent, onBack, hosting, onStatusChange }: { agent: Agent; onBack: () => void; hosting: string; onStatusChange?: (status: HistoryRowStatus) => void }) => {
+export const AgentDetailView = ({ agent, onBack, hosting, onStatusChange }: { agent: Agent; onBack: () => void; hosting: string; onStatusChange?: (status: HistoryRowStatus) => void }) => {
   const d = getAgentDetail(agent);
   const desc = detailDescription(agent);
   const isScale = hosting === 'scale';
@@ -1248,6 +1250,7 @@ const AgentDetailView = ({ agent, onBack, hosting, onStatusChange }: { agent: Ag
 
   const [addBuildOpen, setAddBuildOpen] = useState(false);
   const [selectedBuildId, setSelectedBuildId] = useState<string | null>(null);
+  const [tab, setTab] = useState<'history' | 'optimization' | 'scheduled'>('history');
   const timerRefs = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => {
@@ -1460,34 +1463,43 @@ const AgentDetailView = ({ agent, onBack, hosting, onStatusChange }: { agent: Ag
         </div>
 
         <div className="flex flex-col gap-6 w-full">
+          {/* Tabs */}
+          <div className="flex items-center gap-6 border-b border-[#E5E7EB]">
+            {([['history', 'Deployment History'], ['optimization', 'Agent Optimization'], ['scheduled', 'Scheduled Tasks']] as const).map(([id, label]) => (
+              <button key={id} type="button" onClick={() => setTab(id)}
+                className={cn('relative -mb-px pb-3 text-[15px] transition-colors',
+                  tab === id ? 'font-semibold text-[#19202F]' : 'font-light text-[#818EA9] hover:text-[#5B6579]')}>
+                {label}
+                {tab === id && <span className="absolute left-0 right-0 -bottom-px h-[2px] rounded-full bg-[#19202F]" />}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'history' && (<>
           <div className="flex flex-col gap-3">
             {!isScale ? (
-              <>
-                <h2 className="text-[18px] font-semibold text-[#111827]">Build History</h2>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-[14px] text-[#5B6579]">
-                    <RefreshCw size={12} className="shrink-0" />
-                    <span>
-                      Automatically created for pushes to{' '}
-                      <span className="inline-flex items-center gap-1 text-[#19202F]">
-                        <GithubIcon size={14} className="shrink-0" />
-                        {d.repository}
-                      </span>
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAddBuildOpen(true)}
-                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded text-[14px] font-medium border border-[#714DFF] text-[#714DFF] bg-white hover:bg-[#F8F6FF] transition-colors"
-                  >
-                    <Plus size={14} />
-                    Add Build
-                  </button>
-                </div>
-              </>
-            ) : (
               <div className="flex items-center justify-between">
-                <h2 className="text-[18px] font-semibold text-[#111827]">Build History</h2>
+                <div className="flex items-center gap-2 text-[14px] text-[#5B6579]">
+                  <RefreshCw size={12} className="shrink-0" />
+                  <span>
+                    Automatically created for pushes to{' '}
+                    <span className="inline-flex items-center gap-1 text-[#19202F]">
+                      <GithubIcon size={14} className="shrink-0" />
+                      {d.repository}
+                    </span>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAddBuildOpen(true)}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded text-[14px] font-medium border border-[#714DFF] text-[#714DFF] bg-white hover:bg-[#F8F6FF] transition-colors"
+                >
+                  <Plus size={14} />
+                  Add Build
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-end">
                 <button
                   type="button"
                   onClick={() => setAddBuildOpen(true)}
@@ -1568,6 +1580,37 @@ const AgentDetailView = ({ agent, onBack, hosting, onStatusChange }: { agent: Ag
               </div>
             ))}
           </div>
+          </>)}
+
+          {tab === 'optimization' && (
+            <div className="flex flex-col items-center text-center px-6 py-16 gap-4">
+              <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#F0F0F3]">
+                <Sparkle size={22} className="text-[#5B6579]" />
+              </div>
+              <div className="flex flex-col gap-2 items-center">
+                <h3 className="text-[18px] font-semibold text-[#111827]">Optimize Agent with Vero</h3>
+                <p className="text-[14px] leading-relaxed text-[#6B7280] max-w-[460px]">
+                  Vero automatically tests, analyzes, and rewrites your agent&rsquo;s code until it meets your performance goal. All changes are delivered as a version-controlled Pull Request for your final review and merge.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 h-9 px-4 rounded text-[14px] font-medium border border-[#714DFF] text-[#714DFF] bg-white hover:bg-[#F8F6FF] transition-colors mt-1"
+              >
+                <Plus size={15} />
+                New Optimization Loop
+              </button>
+              <button type="button" className="text-[13px] font-semibold text-[#19202F] hover:underline">
+                Learn more
+              </button>
+            </div>
+          )}
+
+          {tab === 'scheduled' && (
+            <div className="-mt-2">
+              <ScheduledTasks variant="timeline" connectedTools={['slack', 'github', 'linear']} embedded />
+            </div>
+          )}
         </div>
       </div>
       <AddBuildDialog
