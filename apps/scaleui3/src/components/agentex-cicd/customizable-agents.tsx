@@ -1275,7 +1275,9 @@ const CombinedSidebar = ({
       </div>
 
       {/* Resize handle — sibling outside overflow-hidden container so it isn't clipped */}
-      <div onMouseDown={handleResizeDown} className="w-1 shrink-0 cursor-col-resize z-20 hover:bg-[#714DFF] transition-colors" style={{ marginLeft: '-1px' }} />
+      <div onMouseDown={handleResizeDown} className="group w-1 shrink-0 cursor-col-resize z-20 flex justify-center" style={{ marginLeft: '-1px' }}>
+        <div className="w-px h-full bg-transparent group-hover:bg-[#C4CBD8] transition-colors" />
+      </div>
 
       {/* Context menu */}
       {openMenuId && menuPos && (

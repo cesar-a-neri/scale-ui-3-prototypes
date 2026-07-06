@@ -718,7 +718,8 @@ const AgendaVariant = ({ schedules, onTogglePause, onRunNow, onRemove, onCompose
               )}
             </div>
 
-            {/* Add tools */}
+            {/* Add tools — hidden in the embedded agent details view */}
+            {!embedded && (
             <div className="relative">
               <button type="button" onClick={() => setPop(p => p === 'tools' ? null : 'tools')}
                 className={composerChip(pop === 'tools')}
@@ -736,6 +737,7 @@ const AgendaVariant = ({ schedules, onTogglePause, onRunNow, onRemove, onCompose
                 </>
               )}
             </div>
+            )}
           </div>
           <button type="button" onClick={handleSend} disabled={!canSend}
             className="flex items-center justify-center w-8 h-8 rounded-full transition-opacity hover:opacity-90"
@@ -949,8 +951,8 @@ const SELECT_CHEVRON: React.CSSProperties = {
 const CADENCE_SEGMENTS: { id: CadenceMode; label: string }[] = [
   { id: 'daily', label: 'Daily' },
   { id: 'weekly', label: 'Weekly' },
-  { id: 'interval', label: 'Interval' },
   { id: 'monthly', label: 'Monthly' },
+  { id: 'interval', label: 'Interval' },
 ];
 
 const smallFieldCls = 'h-8 px-2.5 rounded-md border border-[#D1DAEB] text-[13px] text-[#19202F] bg-white outline-none focus:border-[#714DFF] focus:ring-2 focus:ring-[#714DFF]/20';
