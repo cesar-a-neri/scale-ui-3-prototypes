@@ -87,6 +87,13 @@ export function useDebugMode() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PALETTE_STYLE_ID = 'protocp-styles';
+// Palette colors mirror Tweakpane's default (v4) dark theme so the command
+// menu reads as part of the same dev surface.
+//   base bg      hsl(230, 7%, 17%)
+//   foreground   hsl(230, 10%, 80%)
+//   label/muted  hsl(230, 12%, 62%)
+//   overlay fill rgba(187, 188, 196, x)   (subtle light-on-dark)
+//   accent       hsl(210, 90%, 66%)       (Tweakpane's blue)
 const PALETTE_CSS = `
 .protocp-overlay {
   position: fixed;
@@ -96,20 +103,23 @@ const PALETTE_CSS = `
   align-items: flex-start;
   justify-content: center;
   padding-top: 12vh;
-  background: rgba(15, 18, 25, 0.45);
-  backdrop-filter: blur(2px);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: rgba(10, 11, 13, 0.55);
+  backdrop-filter: blur(3px);
+  /* Match Tweakpane's monospace type (Roboto Mono @ 11px) so the palette
+     reads as part of the same dev surface. */
+  font-family: "Roboto Mono", "Source Code Pro", Menlo, Courier, monospace;
 }
 .protocp-panel {
   width: 100%;
-  max-width: 560px;
+  max-width: 540px;
   max-height: 64vh;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  color: #1a1d24;
-  border-radius: 12px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.16);
+  background: hsl(230, 7%, 17%);
+  color: hsl(230, 10%, 80%);
+  border: 1px solid rgba(187, 188, 196, 0.14);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35);
   overflow: hidden;
 }
 .protocp-search {
@@ -117,42 +127,65 @@ const PALETTE_CSS = `
   box-sizing: border-box;
   border: none;
   outline: none;
-  padding: 16px 18px;
-  font-size: 15px;
-  color: #1a1d24;
-  background: #ffffff;
-  border-bottom: 1px solid #ebedf0;
+  padding: 15px 18px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: hsl(230, 14%, 90%);
+  background: transparent;
+  border-bottom: 1px solid rgba(187, 188, 196, 0.1);
 }
-.protocp-search::placeholder { color: #9aa0a8; }
+.protocp-search::placeholder { color: hsl(230, 12%, 52%); }
 .protocp-list {
   overflow-y: auto;
-  padding: 6px 0;
+  padding: 6px;
 }
 .protocp-group-label {
-  padding: 8px 18px 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  padding: 8px 10px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #9aa0a8;
+  color: hsl(230, 12%, 52%);
 }
 .protocp-item {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 9px 18px;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 6px;
   cursor: pointer;
   user-select: none;
 }
-.protocp-item[data-active="true"] { background: #eef2ff; }
-.protocp-item-title { font-size: 14px; font-weight: 500; color: #1a1d24; }
-.protocp-item-meta { font-size: 12px; color: #8b919a; }
-.protocp-empty { padding: 18px; font-size: 13px; color: #9aa0a8; text-align: center; }
+.protocp-item[data-active="true"] { background: rgba(187, 188, 196, 0.14); }
+.protocp-item-dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(187, 188, 196, 0.35);
+}
+.protocp-item[data-active="true"] .protocp-item-dot { background: hsl(210, 90%, 66%); }
+.protocp-item-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(230, 10%, 82%);
+}
+.protocp-item[data-active="true"] .protocp-item-title { color: hsl(230, 16%, 93%); }
+.protocp-item-enter {
+  flex: none;
+  font-size: 12px;
+  color: hsl(210, 90%, 72%);
+  opacity: 0;
+}
+.protocp-item[data-active="true"] .protocp-item-enter { opacity: 1; }
+.protocp-empty { padding: 18px; font-size: 12px; color: hsl(230, 12%, 52%); text-align: center; }
 .protocp-footer {
-  border-top: 1px solid #ebedf0;
-  padding: 8px 18px;
-  font-size: 11px;
-  color: #9aa0a8;
+  border-top: 1px solid rgba(187, 188, 196, 0.1);
+  padding: 8px 14px;
+  font-size: 10.5px;
+  color: hsl(230, 12%, 52%);
   display: flex;
   gap: 14px;
 }
@@ -285,11 +318,9 @@ export function CommandPalette() {
                       onMouseEnter={() => setActiveIndex(filtered.indexOf(entry))}
                       onClick={() => select(entry)}
                     >
+                      <span className="protocp-item-dot" />
                       <span className="protocp-item-title">{entry.title}</span>
-                      <span className="protocp-item-meta">
-                        {entry.stack} · {entry.path}
-                        {entry.tags && entry.tags.length > 0 ? ` · ${entry.tags.join(', ')}` : ''}
-                      </span>
+                      <span className="protocp-item-enter">↵</span>
                     </div>
                   );
                 })}

@@ -10,10 +10,11 @@ import {
   Copy, MessagesSquare, SquarePen, MoreHorizontal, Search,
   PanelLeftClose, PanelLeftOpen, Pencil, Trash2, SlidersHorizontal, PanelLeft, ArrowUp, Box, ChevronDown,
   Heading1, Heading2, Heading3, Bold, Italic, List, ListOrdered, Code, Quote, Minus, Table, ChevronDown as ChevronDownSm,
-  Maximize2, ArrowLeft, Check, CalendarClock, TriangleAlert,
+  ArrowLeft, Check, CalendarClock, TriangleAlert,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScheduledTasks, type ScheduledVariant, type ScheduleFormError } from './scheduled-tasks';
+import { BuilderSidePanel, BuilderCTA, type AgentConfigState } from './agent-builder';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -291,9 +292,7 @@ const PREVIEW_COMPONENTS = {
 const SystemInstructions = ({ value, onChange, rows = 9 }: { value: string; onChange: (v: string) => void; rows?: number }) => {
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
   const [headingOpen, setHeadingOpen] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
-  const taExpandedRef = useRef<HTMLTextAreaElement>(null);
 
   const wrap = (before: string, after: string, placeholder: string) => {
     const ta = taRef.current;
@@ -390,14 +389,6 @@ const SystemInstructions = ({ value, onChange, rows = 9 }: { value: string; onCh
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            title="Expand editor"
-            onMouseDown={e => { e.preventDefault(); setExpanded(true); }}
-            className="flex items-center justify-center w-6 h-6 rounded text-[#818EA9] hover:text-[#19202F] hover:bg-[#F0F0F3] transition-colors"
-          >
-            <Maximize2 size={12} />
-          </button>
         </div>
       </div>
       {mode === 'edit' ? (
@@ -458,97 +449,6 @@ const SystemInstructions = ({ value, onChange, rows = 9 }: { value: string; onCh
           className="w-full px-3 py-2.5 rounded-md border border-[#D1DAEB] text-[13px] leading-[1.7] text-[#19202F] bg-white overflow-y-auto"
           style={{ minHeight: `${rows * 1.7 * 13 + 20}px`, maxHeight: `${(rows * 1.7 * 13 + 20) * 1.3}px` }}>
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={PREVIEW_COMPONENTS as never}>{value || '*No instructions yet.*'}</ReactMarkdown>
-        </div>
-      )}
-
-      {/* Expanded dialog */}
-      {expanded && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-8"
-          style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-          onMouseDown={e => { if (e.target === e.currentTarget) setExpanded(false); }}>
-          <div className="flex flex-col bg-white rounded-xl shadow-2xl overflow-hidden"
-            style={{ width: '100%', maxWidth: 780, height: '80vh' }}>
-            {/* Dialog header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-[#E8ECF2] shrink-0">
-              <span className="text-[14px] font-semibold text-[#19202F]">System Instructions</span>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center p-[2px] rounded-md text-[11px]"
-                  style={{ border: '1px solid #e9e9eb', background: '#f5f7fa' }}>
-                  {(['edit', 'preview'] as const).map(m => (
-                    <button key={m} type="button" onClick={() => setMode(m)}
-                      className="px-2 h-[20px] rounded transition-all capitalize"
-                      style={mode === m
-                        ? { background: ACCENT_MUTED, color: ACCENT_SOFT, fontWeight: 600 }
-                        : { background: 'transparent', color: '#78839c', fontWeight: 400 }}>
-                      {m}
-                    </button>
-                  ))}
-                </div>
-                <button type="button" onClick={() => setExpanded(false)}
-                  className="flex items-center justify-center w-7 h-7 rounded-md text-[#818EA9] hover:text-[#19202F] hover:bg-[#F0F0F3] transition-colors">
-                  <X size={15} />
-                </button>
-              </div>
-            </div>
-            {/* Dialog toolbar (edit mode only) */}
-            {mode === 'edit' && (
-              <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-[#D1DAEB] bg-[#fafbfc] shrink-0">
-                <div className="relative">
-                  <button type="button" title="Heading"
-                    onMouseDown={e => { e.preventDefault(); setHeadingOpen(o => !o); }}
-                    className="flex items-center gap-0.5 h-6 px-1.5 rounded text-[#818EA9] hover:text-[#19202F] hover:bg-[#F0F0F3] transition-colors text-[11px] font-medium">
-                    <Heading2 size={13} /><ChevronDownSm size={10} />
-                  </button>
-                  {headingOpen && (
-                    <div className="absolute top-full left-0 mt-1 z-50 rounded-md border border-[#D1DAEB] bg-white shadow-md py-0.5 min-w-[120px]"
-                      onMouseLeave={() => setHeadingOpen(false)}>
-                      {headings.map(h => (
-                        <button key={h.label} type="button"
-                          onMouseDown={e => { e.preventDefault(); prependLine(h.prefix); setHeadingOpen(false); }}
-                          className="flex items-center gap-2 w-full px-3 py-1.5 text-[12px] text-[#19202F] hover:bg-[#F0F0F3] transition-colors">
-                          {h.icon}{h.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="w-px h-4 mx-1 bg-[#D1DAEB]" />
-                {inlineTools.map(toolBtn)}
-                <div className="w-px h-4 mx-1 bg-[#D1DAEB]" />
-                {blockTools.map(toolBtn)}
-                <div className="w-px h-4 mx-1 bg-[#D1DAEB]" />
-                {codeTools.map(toolBtn)}
-                <div className="w-px h-4 mx-1 bg-[#D1DAEB]" />
-                {miscTools.map(toolBtn)}
-              </div>
-            )}
-            {/* Dialog content */}
-            <div className="flex-1 overflow-hidden">
-              {mode === 'edit' ? (
-                <textarea
-                  ref={taExpandedRef}
-                  value={value}
-                  onChange={e => onChange(e.target.value)}
-                  className="w-full h-full px-5 py-4 text-[13px] font-mono leading-[1.7] text-[#19202F] bg-white outline-none resize-none"
-                  placeholder="e.g., You are a research assistant…"
-                  spellCheck={false}
-                  autoFocus
-                />
-              ) : (
-                <div className="h-full overflow-y-auto px-5 py-4 text-[13px] leading-[1.7] text-[#19202F]">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={PREVIEW_COMPONENTS as never}>{value || '*No instructions yet.*'}</ReactMarkdown>
-                </div>
-              )}
-            </div>
-            {/* Dialog footer */}
-            <div className="px-5 py-3 border-t border-[#E8ECF2] shrink-0 flex justify-end">
-              <button type="button" onClick={() => setExpanded(false)}
-                className="text-[13px] font-medium px-4 py-1.5 rounded-md text-white transition-opacity hover:opacity-90"
-                style={{ background: ACCENT }}>
-                Done
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>
@@ -1233,6 +1133,7 @@ const CombinedSidebar = ({
                 onMouseLeave={e => { e.currentTarget.style.backgroundColor = configOpen ? ACCENT_TINT : 'transparent'; }}>
                 <SlidersHorizontal className="w-4 h-4 shrink-0" />
                 Configure Agent
+                <span className="ml-auto text-[12px] font-normal" style={{ color: '#9CA3AF' }}>⌘K</span>
               </button>
             </div>
           )}
@@ -1307,6 +1208,7 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
   const [panel, setPanel] = useState<Panel>('sidebar');
   const [configOpen, setConfigOpen] = useState(false);
   const [scheduledOpen, setScheduledOpen] = useState(false);
+  const [builderOpen, setBuilderOpen] = useState(false);
 
   // Let the page know when the Scheduled Tasks surface is showing so it can
   // scope Tweakpane params (e.g. the empty-state toggle) to this page.
@@ -1356,6 +1258,27 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
 
   const configProps = { agentName, onAgentName: setAgentName, agentDescription, onAgentDescription: setAgentDescription, instructions, onInstructions: setInstructions, model, onModel: setModel, harness, onHarness: setHarness, capability, onCapability: setCapability, connected, onToggle: toggle };
 
+  // Agent Builder — reads/writes the live config so "apply" is reflected in the form.
+  // Its setters also commit to savedConfig so accepting a change in the builder is
+  // treated as saved (no "Save Changes" prompt for builder-applied edits; manual
+  // form edits still flip hasChanges).
+  const builderCfg: AgentConfigState = {
+    instructions, setInstructions: (v) => { savedConfig.current.instructions = v; setInstructions(v); },
+    model, setModel: (v) => { savedConfig.current.model = v; setModel(v); },
+    capability, setCapability: (v) => { savedConfig.current.capability = v; setCapability(v); },
+    connected, setConnected: (v) => { savedConfig.current.connected = v; setConnected(v); },
+  };
+  const openBuilder = () => {
+    // The builder's docked side panel replaces the left sidebar rather than
+    // stacking with it; restore the sidebar when it closes.
+    setPanel(null);
+    setBuilderOpen(true);
+  };
+  const closeBuilder = () => {
+    setBuilderOpen(false);
+    setPanel('sidebar');
+  };
+
   return (
     <div className="flex-1 flex overflow-hidden">
       {/* Combined sidebar */}
@@ -1379,7 +1302,7 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
       )}
 
       {/* Chat — Primary Surface */}
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
         {!panel && (
           <div className="px-3 h-10 flex items-center shrink-0 mb-1 mt-4">
             <button type="button" title="Panel"
@@ -1404,7 +1327,10 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 overflow-y-auto">
               <div className="max-w-[640px] mx-auto px-8 pt-12 pb-6 flex flex-col gap-6">
-                <h1 className="text-[20px] font-semibold text-[#19202F]">Configure Agent</h1>
+                <div className="flex items-center justify-between gap-3">
+                  <h1 className="text-[20px] font-semibold text-[#19202F]">Configure Agent</h1>
+                  <BuilderCTA onClick={openBuilder} variant="ghost" />
+                </div>
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col gap-1.5">
                     <FormLabel>Name</FormLabel>
@@ -1476,9 +1402,15 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
             )}
           </div>
         ) : (
-          <ChatPlayground messages={threadMessages[activeThread] ?? []} />
+          <div className="flex-1 min-h-0">
+            <ChatPlayground messages={threadMessages[activeThread] ?? []} />
+          </div>
         )}
+
       </div>
+
+      {/* Agent Builder — a docked side panel (flex sibling) that pushes content left */}
+      <BuilderSidePanel open={builderOpen} onClose={closeBuilder} cfg={builderCfg} />
     </div>
   );
 };
