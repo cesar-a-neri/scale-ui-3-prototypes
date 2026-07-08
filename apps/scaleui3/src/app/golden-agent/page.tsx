@@ -144,9 +144,12 @@ export default function GoldenAgentPage() {
                   onScheduleFormOpenChange={(open) => { setFormOpen(open); if (!open) setFormError('none'); }}
                 />
               ) : (
-                <main className="flex-1 min-h-0 overflow-y-auto w-full px-6 pb-6 pt-[18px] flex flex-col gap-4">
-                  <AgentDetailView agent={COMMAND_AGENT} hosting="scale" onBack={() => setView('agents')} />
-                </main>
+                /* Agent details — body capped at 1256px wide, centered, with 24px padding */
+                <div className="flex-1 min-h-0 overflow-y-auto flex justify-center p-6">
+                  <main className="w-full max-w-[1256px] flex flex-col gap-4">
+                    <AgentDetailView agent={COMMAND_AGENT} hosting="scale" onBack={() => setView('agents')} />
+                  </main>
+                </div>
               )}
             </div>
           </ShowDescriptionsContext.Provider>
