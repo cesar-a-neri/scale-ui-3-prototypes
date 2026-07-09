@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTweakpane } from '@proto/devtools/react';
 import AgentexCICD, { AgentDetailView, type Agent } from '@/components/agentex-cicd/agentex-cicd';
 import { CustomizableAgents } from '@/components/agentex-cicd/customizable-agents';
+import { DEFAULT_REFINE_WAIT, type RefineWaitConfig, type RefineWaitStyle } from '@/components/agentex-cicd/agent-builder';
 import type { ScheduleFormError } from '@/components/agentex-cicd/scheduled-tasks';
 
 type AgentPage = 'chat' | 'details';
@@ -20,6 +21,8 @@ const COMMAND_AGENT: Agent = {
 };
 import { downloadGoldenAgentHandoff } from '@/components/agentex-cicd/handoff/downloadHandoff';
 import { NavV3, ShowIconsContext, ShowDescriptionsContext } from '@/components/sgp-nav/sgp-nav';
+import { Toaster } from '@/components/ui/sonner';
+import { ActiveDirectionProvider } from '@/components/active-direction';
 
 const PURPLE = { accent: '#714DFF', tint: '#F5F3FF', muted: '#EDE9FE', text: '#4C3AE3', soft: '#5746d4' };
 
@@ -44,12 +47,20 @@ const FORM_ERROR_OPTS = {
   },
 };
 
+// Refine-wait design variants — shown only while the Agent Builder panel is open.
+const REFINE_OPTS = {
+  refineWaitStyle: { label: 'Wait style', options: { 'Reasoning steps': 'steps', 'Minimal spinner': 'minimal' } },
+  refineLatencyMs: { label: 'Latency (ms)', min: 3000, max: 45000, step: 1000 },
+  refineShowElapsed: { label: 'Show elapsed' },
+  refineAllowStop: { label: 'Allow stop' },
+};
+
 // Prototyping harness. `alwaysVisible` keeps the panel (and the handoff
 // "Download .zip" button) shown regardless of dev mode — same pattern as Falcon.
 // Params are scoped to the UI that's showing: `emptyState` only while the
 // Scheduled Tasks surface is up, `formError` only while the schedule modal is
 // open. Keying by both flags recreates the pane so its binding list can change.
-function GoldenAgentDevPane({ agentPage, onAgentPageChange, showEmptyState, emptyState, onEmptyStateChange, showFormError, formError, onFormErrorChange }: {
+function GoldenAgentDevPane({ agentPage, onAgentPageChange, showEmptyState, emptyState, onEmptyStateChange, showFormError, formError, onFormErrorChange, showRefine, refineWait, onRefineWaitChange }: {
   agentPage: AgentPage;
   onAgentPageChange: (v: AgentPage) => void;
   showEmptyState: boolean;
@@ -58,17 +69,27 @@ function GoldenAgentDevPane({ agentPage, onAgentPageChange, showEmptyState, empt
   showFormError: boolean;
   formError: ScheduleFormError;
   onFormErrorChange: (v: ScheduleFormError) => void;
+  showRefine: boolean;
+  refineWait: RefineWaitConfig;
+  onRefineWaitChange: (v: RefineWaitConfig) => void;
 }) {
   const { params } = useTweakpane(
     {
       agentPage,
       ...(showEmptyState ? { emptyState } : {}),
       ...(showFormError ? { formError } : {}),
-    } as Record<string, boolean | string>,
+      ...(showRefine ? {
+        refineWaitStyle: refineWait.style,
+        refineLatencyMs: refineWait.latencyMs,
+        refineShowElapsed: refineWait.showElapsed,
+        refineAllowStop: refineWait.allowStop,
+      } : {}),
+    } as Record<string, boolean | string | number>,
     {
       ...AGENT_PAGE_OPTS,
       ...(showEmptyState ? { emptyState: { label: 'Empty state' } } : {}),
       ...(showFormError ? FORM_ERROR_OPTS : {}),
+      ...(showRefine ? REFINE_OPTS : {}),
     },
     {
       alwaysVisible: true,
@@ -80,6 +101,10 @@ function GoldenAgentDevPane({ agentPage, onAgentPageChange, showEmptyState, empt
   const page = (params as { agentPage?: AgentPage }).agentPage;
   const empty = (params as { emptyState?: boolean }).emptyState;
   const err = (params as { formError?: ScheduleFormError }).formError;
+  const rStyle = (params as { refineWaitStyle?: RefineWaitStyle }).refineWaitStyle;
+  const rLatency = (params as { refineLatencyMs?: number }).refineLatencyMs;
+  const rElapsed = (params as { refineShowElapsed?: boolean }).refineShowElapsed;
+  const rStop = (params as { refineAllowStop?: boolean }).refineAllowStop;
   useEffect(() => {
     if (page) onAgentPageChange(page);
   }, [page, onAgentPageChange]);
@@ -89,6 +114,15 @@ function GoldenAgentDevPane({ agentPage, onAgentPageChange, showEmptyState, empt
   useEffect(() => {
     if (showFormError && err) onFormErrorChange(err);
   }, [err, showFormError, onFormErrorChange]);
+  useEffect(() => {
+    if (!showRefine) return;
+    onRefineWaitChange({
+      style: rStyle ?? DEFAULT_REFINE_WAIT.style,
+      latencyMs: typeof rLatency === 'number' ? rLatency : DEFAULT_REFINE_WAIT.latencyMs,
+      showElapsed: typeof rElapsed === 'boolean' ? rElapsed : DEFAULT_REFINE_WAIT.showElapsed,
+      allowStop: typeof rStop === 'boolean' ? rStop : DEFAULT_REFINE_WAIT.allowStop,
+    });
+  }, [showRefine, rStyle, rLatency, rElapsed, rStop, onRefineWaitChange]);
   return null;
 }
 
@@ -100,6 +134,8 @@ export default function GoldenAgentPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [formError, setFormError] = useState<ScheduleFormError>('none');
   const [agentPage, setAgentPage] = useState<AgentPage>('chat');
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [refineWait, setRefineWait] = useState<RefineWaitConfig>(DEFAULT_REFINE_WAIT);
   const onChat = agentPage === 'chat';
 
   const handleAgentSelect = (name: string) => { setCommandAgentName(name); setView('command-center'); };
@@ -115,9 +151,10 @@ export default function GoldenAgentPage() {
   }, []);
 
   return (
-    <>
+    <ActiveDirectionProvider>
+      <Toaster />
       <GoldenAgentDevPane
-        key={`${onChat && scheduledOpen ? 's' : '_'}${onChat && formOpen ? 'f' : '_'}`}
+        key={`${onChat && scheduledOpen ? 's' : '_'}${onChat && formOpen ? 'f' : '_'}${onChat && builderOpen ? 'b' : '_'}`}
         agentPage={agentPage}
         onAgentPageChange={setAgentPage}
         showEmptyState={onChat && scheduledOpen}
@@ -126,6 +163,9 @@ export default function GoldenAgentPage() {
         showFormError={onChat && formOpen}
         formError={formError}
         onFormErrorChange={setFormError}
+        showRefine={onChat && builderOpen}
+        refineWait={refineWait}
+        onRefineWaitChange={setRefineWait}
       />
       {view === 'command-center' ? (
         <ShowIconsContext.Provider value={true}>
@@ -142,6 +182,8 @@ export default function GoldenAgentPage() {
                   onScheduledOpenChange={setScheduledOpen}
                   scheduleFormError={formError}
                   onScheduleFormOpenChange={(open) => { setFormOpen(open); if (!open) setFormError('none'); }}
+                  refineWait={refineWait}
+                  onBuilderOpenChange={setBuilderOpen}
                 />
               ) : (
                 /* Agent details — body capped at 1256px wide, centered, with 24px padding */
@@ -157,6 +199,6 @@ export default function GoldenAgentPage() {
       ) : (
         <AgentexCICD onAgentSelect={handleAgentSelect} />
       )}
-    </>
+    </ActiveDirectionProvider>
   );
 }

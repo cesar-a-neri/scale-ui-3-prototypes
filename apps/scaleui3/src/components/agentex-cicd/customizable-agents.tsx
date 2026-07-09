@@ -10,11 +10,13 @@ import {
   Copy, MessagesSquare, SquarePen, MoreHorizontal, Search,
   PanelLeftClose, PanelLeftOpen, Pencil, Trash2, SlidersHorizontal, PanelLeft, ArrowUp, Box, ChevronDown,
   Heading1, Heading2, Heading3, Bold, Italic, List, ListOrdered, Code, Quote, Minus, Table, ChevronDown as ChevronDownSm,
-  ArrowLeft, Check, CalendarClock, TriangleAlert,
+  ArrowLeft, Check, CalendarClock, TriangleAlert, CircleCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Spinner } from '@/components/ui/spinner';
 import { ScheduledTasks, type ScheduledVariant, type ScheduleFormError } from './scheduled-tasks';
-import { BuilderSidePanel, BuilderCTA, type AgentConfigState } from './agent-builder';
+import { toast } from 'sonner';
+import { BuilderSidePanel, BuilderCTA, useRefineJob, buildProposal, DEFAULT_REFINE_WAIT, type AgentConfigState, type RefineWaitConfig } from './agent-builder';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -808,6 +810,8 @@ const CombinedSidebar = ({
   sidebarBg = 'muted',
   onBack,
   navSpacing = 20,
+  configBadge = false,
+  configBusy = false,
 }: {
   activeThread: string; onSelect: (id: string) => void; onClose: () => void;
   agentName: string; onAgentName: (v: string) => void;
@@ -828,6 +832,8 @@ const CombinedSidebar = ({
   sidebarBg?: 'muted' | 'white';
   onBack?: () => void;
   navSpacing?: number;
+  configBadge?: boolean;
+  configBusy?: boolean;
 }) => {
   const [tab, setTab] = useState<'threads' | 'config'>('threads');
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
@@ -1133,6 +1139,9 @@ const CombinedSidebar = ({
                 onMouseLeave={e => { e.currentTarget.style.backgroundColor = configOpen ? ACCENT_TINT : 'transparent'; }}>
                 <SlidersHorizontal className="w-4 h-4 shrink-0" />
                 Configure Agent
+                {configBusy
+                  ? <Spinner className="animate-spin shrink-0" style={{ width: 13, height: 13, color: ACCENT_TEXT }} />
+                  : configBadge && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: ACCENT }} title="Refine changes ready" />}
                 <span className="ml-auto text-[12px] font-normal" style={{ color: '#9CA3AF' }}>⌘K</span>
               </button>
             </div>
@@ -1204,15 +1213,20 @@ const CombinedSidebar = ({
   );
 };
 
-const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, initialAgentName, scheduledVariant = 'list', scheduledEmptyState = false, onScheduledOpenChange, navSpacing = 20, scheduleFormError = 'none', onScheduleFormOpenChange }: { configMode?: 'sidebar' | 'fullpage'; sidebarBg?: 'muted' | 'white'; onBack?: () => void; initialAgentName?: string | null; scheduledVariant?: ScheduledVariant; scheduledEmptyState?: boolean; onScheduledOpenChange?: (open: boolean) => void; navSpacing?: number; scheduleFormError?: ScheduleFormError; onScheduleFormOpenChange?: (open: boolean) => void }) => {
+const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, initialAgentName, scheduledVariant = 'list', scheduledEmptyState = false, onScheduledOpenChange, navSpacing = 20, scheduleFormError = 'none', onScheduleFormOpenChange, refineWait = DEFAULT_REFINE_WAIT, onBuilderOpenChange }: { configMode?: 'sidebar' | 'fullpage'; sidebarBg?: 'muted' | 'white'; onBack?: () => void; initialAgentName?: string | null; scheduledVariant?: ScheduledVariant; scheduledEmptyState?: boolean; onScheduledOpenChange?: (open: boolean) => void; navSpacing?: number; scheduleFormError?: ScheduleFormError; onScheduleFormOpenChange?: (open: boolean) => void; refineWait?: RefineWaitConfig; onBuilderOpenChange?: (open: boolean) => void }) => {
   const [panel, setPanel] = useState<Panel>('sidebar');
   const [configOpen, setConfigOpen] = useState(false);
   const [scheduledOpen, setScheduledOpen] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(false);
+  // Refine job lives here (not in the panel) so it survives the panel closing —
+  // closing is view-only, the job keeps running in the background.
+  const refineJob = useRefineJob(refineWait.latencyMs);
 
   // Let the page know when the Scheduled Tasks surface is showing so it can
   // scope Tweakpane params (e.g. the empty-state toggle) to this page.
   useEffect(() => { onScheduledOpenChange?.(scheduledOpen); }, [scheduledOpen, onScheduledOpenChange]);
+  // Same, for the Agent Builder — so the page can scope the refine-wait params.
+  useEffect(() => { onBuilderOpenChange?.(builderOpen); }, [builderOpen, onBuilderOpenChange]);
   const [activeThread, setActiveThread] = useState('t1');
   const [threadMessages] = useState<Record<string, ChatMessage[]>>(ALL_THREAD_MESSAGES);
   const [selectedAgentId, setSelectedAgentId] = useState(MOCK_AGENTS[0].id);
@@ -1279,6 +1293,42 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
     setPanel('sidebar');
   };
 
+  // Completion signal. A finished refine is a review gate (proposed diffs), so it
+  // needs a signal that survives navigating away from the panel: a toast (fired
+  // only when the panel is closed, i.e. they can't already see it) plus a badge on
+  // the Configure Agent entry point (+ the Refine button inside it) that clears
+  // once they open the panel to review.
+  const [hasUnseenProposal, setHasUnseenProposal] = useState(false);
+  const builderCfgRef = useRef(builderCfg);
+  builderCfgRef.current = builderCfg;
+  const prevPhaseRef = useRef(refineJob.phase);
+  useEffect(() => {
+    const prev = prevPhaseRef.current;
+    prevPhaseRef.current = refineJob.phase;
+    if (prev !== 'done' && refineJob.phase === 'done') {
+      if (!builderOpen) {
+        const count = buildProposal(builderCfgRef.current).length;
+        setHasUnseenProposal(true);
+        toast.success('Agent Builder finished refining', {
+          description: count === 1 ? '1 proposed change to review' : `${count} proposed changes to review`,
+          // Actionable toast — give the user real time to hit "Review" before it dismisses.
+          duration: 10000,
+          // Success-green check + accent-purple primary action.
+          icon: <CircleCheck className="size-4" style={{ color: '#1A7F37' }} />,
+          action: { label: 'Review', onClick: () => { setScheduledOpen(false); setConfigOpen(true); openBuilder(); } },
+          classNames: { actionButton: '!bg-[var(--proto-accent)] !text-white' },
+        });
+      }
+    } else if (refineJob.phase !== 'done') {
+      // New job started or stopped — clear any stale badge.
+      setHasUnseenProposal(false);
+    }
+  }, [refineJob.phase, builderOpen]);
+  // Opening the panel while a proposal is ready counts as "seen".
+  useEffect(() => {
+    if (builderOpen && refineJob.phase === 'done') setHasUnseenProposal(false);
+  }, [builderOpen, refineJob.phase]);
+
   return (
     <div className="flex-1 flex overflow-hidden">
       {/* Combined sidebar */}
@@ -1298,19 +1348,21 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
           sidebarBg={sidebarBg}
           onBack={onBack}
           navSpacing={navSpacing}
+          configBadge={hasUnseenProposal}
+          configBusy={refineJob.phase === 'thinking'}
         />
       )}
 
       {/* Chat — Primary Surface */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
+        {/* Absolutely positioned so re-expanding the sidebar doesn't shift the
+            surface below it (Configure Agent, chat, etc.) down. */}
         {!panel && (
-          <div className="px-3 h-10 flex items-center shrink-0 mb-1 mt-4">
-            <button type="button" title="Panel"
-              onClick={() => setPanel('sidebar')}
-              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 text-[#818EA9] hover:bg-[#F3F4F6]">
-              <PanelLeftOpen size={16} />
-            </button>
-          </div>
+          <button type="button" title="Panel"
+            onClick={() => setPanel('sidebar')}
+            className="absolute top-4 left-3 z-20 w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 text-[#818EA9] hover:bg-[#F3F4F6]">
+            <PanelLeftOpen size={16} />
+          </button>
         )}
 
         {/* Scheduled Tasks surface (fullpage mode only) */}
@@ -1329,7 +1381,7 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
               <div className="max-w-[640px] mx-auto px-8 pt-12 pb-6 flex flex-col gap-6">
                 <div className="flex items-center justify-between gap-3">
                   <h1 className="text-[20px] font-semibold text-[#19202F]">Configure Agent</h1>
-                  <BuilderCTA onClick={openBuilder} variant="ghost" />
+                  <BuilderCTA onClick={openBuilder} variant="ghost" busy={refineJob.phase === 'thinking'} badge={hasUnseenProposal} />
                 </div>
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col gap-1.5">
@@ -1410,13 +1462,13 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
       </div>
 
       {/* Agent Builder — a docked side panel (flex sibling) that pushes content left */}
-      <BuilderSidePanel open={builderOpen} onClose={closeBuilder} cfg={builderCfg} />
+      <BuilderSidePanel open={builderOpen} onClose={closeBuilder} cfg={builderCfg} job={refineJob} wait={refineWait} />
     </div>
   );
 };
 
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
-export function CustomizableAgents({ configMode = 'fullpage', sidebarBg = 'muted', onBack, initialAgentName, scheduledVariant = 'list', scheduledEmptyState = false, onScheduledOpenChange, navSpacing = 20, scheduleFormError = 'none', onScheduleFormOpenChange }: { configMode?: 'sidebar' | 'fullpage'; sidebarBg?: 'muted' | 'white'; onBack?: () => void; initialAgentName?: string | null; scheduledVariant?: ScheduledVariant; scheduledEmptyState?: boolean; onScheduledOpenChange?: (open: boolean) => void; navSpacing?: number; scheduleFormError?: ScheduleFormError; onScheduleFormOpenChange?: (open: boolean) => void }) {
-  return <CommandCenter configMode={configMode} sidebarBg={sidebarBg} onBack={onBack} initialAgentName={initialAgentName} scheduledVariant={scheduledVariant} scheduledEmptyState={scheduledEmptyState} onScheduledOpenChange={onScheduledOpenChange} navSpacing={navSpacing} scheduleFormError={scheduleFormError} onScheduleFormOpenChange={onScheduleFormOpenChange} />;
+export function CustomizableAgents({ configMode = 'fullpage', sidebarBg = 'muted', onBack, initialAgentName, scheduledVariant = 'list', scheduledEmptyState = false, onScheduledOpenChange, navSpacing = 20, scheduleFormError = 'none', onScheduleFormOpenChange, refineWait, onBuilderOpenChange }: { configMode?: 'sidebar' | 'fullpage'; sidebarBg?: 'muted' | 'white'; onBack?: () => void; initialAgentName?: string | null; scheduledVariant?: ScheduledVariant; scheduledEmptyState?: boolean; onScheduledOpenChange?: (open: boolean) => void; navSpacing?: number; scheduleFormError?: ScheduleFormError; onScheduleFormOpenChange?: (open: boolean) => void; refineWait?: RefineWaitConfig; onBuilderOpenChange?: (open: boolean) => void }) {
+  return <CommandCenter configMode={configMode} sidebarBg={sidebarBg} onBack={onBack} initialAgentName={initialAgentName} scheduledVariant={scheduledVariant} scheduledEmptyState={scheduledEmptyState} onScheduledOpenChange={onScheduledOpenChange} navSpacing={navSpacing} scheduleFormError={scheduleFormError} onScheduleFormOpenChange={onScheduleFormOpenChange} refineWait={refineWait} onBuilderOpenChange={onBuilderOpenChange} />;
 }

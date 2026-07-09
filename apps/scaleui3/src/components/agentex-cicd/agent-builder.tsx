@@ -13,12 +13,13 @@
 // + Remote "Revise with AI ✦" right drawer + GitHub accept/request-changes review.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  Check, X, ChevronRight, ArrowUp, Plus, Search,
+  Check, X, ChevronRight, ArrowUp, Plus, Search, Square,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { Spinner } from '@/components/ui/spinner';
 import { IntegrationLogo } from './customizable-agents';
 
 const ACCENT      = 'var(--proto-accent)';
@@ -83,7 +84,7 @@ function withCitationBlock(instructions: string): string {
 export const BUILDER_GOAL = 'These threads keep stating claims without citing anything, and they surface bugs the agent can’t file. Make it cite its sources, and let it open a Linear ticket when it spots a bug.';
 
 // Rebuilt from live state every render, so accepted changes drop off the list.
-function buildProposal(cfg: AgentConfigState): FieldChange[] {
+export function buildProposal(cfg: AgentConfigState): FieldChange[] {
   const changes: FieldChange[] = [];
 
   const nextInstructions = withCitationBlock(cfg.instructions);
@@ -145,6 +146,96 @@ function buildProposal(cfg: AgentConfigState): FieldChange[] {
   return changes;
 }
 
+// ─── Refine wait / "thinking" job ─────────────────────────────────────────────
+// Refining an agent takes a real, noticeable amount of time (15–45s). Rather than
+// snapping straight to the diff, we model a `thinking` phase with progressive
+// reasoning steps + an elapsed readout. The job state lives in a hook OWNED BY THE
+// PARENT (CommandCenter) so it survives the side panel unmounting on close — a
+// closed panel keeps refining in the background and resumes on reopen.
+
+export type RefineWaitStyle = 'steps' | 'minimal';
+export interface RefineWaitConfig {
+  style: RefineWaitStyle;
+  latencyMs: number;
+  showElapsed: boolean;
+  allowStop: boolean;
+}
+export const DEFAULT_REFINE_WAIT: RefineWaitConfig = {
+  style: 'steps',
+  latencyMs: 24000,
+  showElapsed: true,
+  allowStop: true,
+};
+
+// Scripted reasoning steps, revealed one at a time across the latency.
+const REFINE_STEPS = [
+  'Reviewing the current configuration',
+  'Interpreting your request',
+  'Drafting proposed changes',
+  'Checking against agent constraints',
+];
+
+export type RefinePhase = 'idle' | 'thinking' | 'done';
+export interface RefineJob {
+  phase: RefinePhase;
+  elapsedSec: number;
+  activeStep: number;   // index of the in-progress step; === REFINE_STEPS.length once done
+  start: () => void;
+  stop: () => void;
+}
+
+// Drives the thinking phase with plain timers (no framer-motion in the repo).
+// `latencyMs` is read at start() time, so a Tweakpane change before sending applies.
+export function useRefineJob(latencyMs: number): RefineJob {
+  const [phase, setPhase] = useState<RefinePhase>('idle');
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const [activeStep, setActiveStep] = useState(0);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const interval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearAll = () => {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+    if (interval.current) { clearInterval(interval.current); interval.current = null; }
+  };
+
+  const stop = () => {
+    clearAll();
+    setPhase('idle');
+    setElapsedSec(0);
+    setActiveStep(0);
+  };
+
+  const start = () => {
+    clearAll();
+    setPhase('thinking');
+    setElapsedSec(0);
+    setActiveStep(0);
+    interval.current = setInterval(() => setElapsedSec(s => s + 1), 1000);
+    const n = REFINE_STEPS.length;
+    const slice = latencyMs / n;
+    for (let i = 1; i < n; i++) {
+      timers.current.push(setTimeout(() => setActiveStep(i), slice * i));
+    }
+    timers.current.push(setTimeout(() => {
+      clearAll();
+      setActiveStep(n);
+      setPhase('done');
+    }, latencyMs));
+  };
+
+  // Only tear timers down on TRUE unmount — never on panel close (the panel
+  // unmounts, but this hook lives in the parent, so the job keeps running).
+  useEffect(() => () => clearAll(), []);
+
+  return { phase, elapsedSec, activeStep, start, stop };
+}
+
+function fmtElapsed(sec: number): string {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 // ─── Shared primitives ──────────────────────────────────────────────────────────
 
 // Three-sparkle "refine" glyph (from the Trace 03 icon set). Uses currentColor so
@@ -159,17 +250,28 @@ function RefineIcon({ size = 15 }: { size?: number }) {
 
 // Entry-point button. Deliberately a secondary affordance (outlined, not a filled
 // primary) — refining an agent is optional assistance, not the main action.
-export function BuilderCTA({ onClick, variant = 'outline', label = 'Refine' }: {
-  onClick: () => void; variant?: 'outline' | 'ghost' | 'icon'; label?: string;
+export function BuilderCTA({ onClick, variant = 'outline', label = 'Refine', busy = false, badge = false }: {
+  onClick: () => void; variant?: 'outline' | 'ghost' | 'icon'; label?: string; busy?: boolean; badge?: boolean;
 }) {
+  // While a refine job is running (and the panel may be closed), the CTA reflects
+  // the in-flight state so it's discoverable: spinner + "Refining…". `badge` marks
+  // a finished-but-unreviewed proposal (never shown while still busy).
+  const glyph = (size: number) =>
+    busy ? <Spinner className="animate-spin" style={{ width: size, height: size, color: ACCENT_TEXT }} /> : <RefineIcon size={size} />;
+  const text = busy ? 'Refining…' : label;
+  const showDot = badge && !busy;
+  const dot = (
+    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: ACCENT }} />
+  );
   if (variant === 'icon') {
     return (
-      <button type="button" onClick={onClick} title={label}
-        className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+      <button type="button" onClick={onClick} title={showDot ? `${label} · changes ready` : text}
+        className="relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
         style={{ color: ACCENT_TEXT }}
         onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--proto-accent-tint)')}
         onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>
-        <RefineIcon size={16} />
+        {glyph(16)}
+        {showDot && <span className="absolute top-1 right-1">{dot}</span>}
       </button>
     );
   }
@@ -180,7 +282,7 @@ export function BuilderCTA({ onClick, variant = 'outline', label = 'Refine' }: {
         style={{ color: ACCENT_TEXT }}
         onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--proto-accent-tint)')}
         onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>
-        <RefineIcon size={15} /> {label}
+        {glyph(15)} {text} {showDot && dot}
       </button>
     );
   }
@@ -191,7 +293,7 @@ export function BuilderCTA({ onClick, variant = 'outline', label = 'Refine' }: {
       style={{ color: ACCENT_TEXT, border: '1px solid var(--proto-accent-muted)' }}
       onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--proto-accent-tint)')}
       onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>
-      <RefineIcon size={15} /> {label}
+      {glyph(15)} {text} {showDot && dot}
     </button>
   );
 }
@@ -232,7 +334,7 @@ function DiffField({ change, compact = false }: { change: FieldChange; compact?:
 // Composer — mirrors the ChatPlayground input: adaptive pill (rounded-full when a
 // single line, rounded-lg when it wraps), 14px text, layered drop + inset shadow,
 // and a circular send button that disables when empty.
-function Composer({ placeholder = 'Ask the builder to change something…', onSend }: { placeholder?: string; onSend?: () => void }) {
+function Composer({ placeholder = 'Ask the builder to change something…', onSend, busy = false, onStop }: { placeholder?: string; onSend?: () => void; busy?: boolean; onStop?: () => void }) {
   const [v, setV] = useState('');
   const [singleLine, setSingleLine] = useState(true);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -243,22 +345,37 @@ function Composer({ placeholder = 'Ask the builder to change something…', onSe
     el.style.height = Math.min(el.scrollHeight, 160) + 'px';
     setSingleLine(el.scrollHeight <= 30);
   };
-  const send = () => { if (!canSend) return; onSend?.(); setV(''); requestAnimationFrame(grow); };
+  const send = () => { if (busy || !canSend) return; onSend?.(); setV(''); requestAnimationFrame(grow); };
   return (
     <div className={cn('relative bg-white transition-[border-radius]', singleLine ? 'rounded-full' : 'rounded-lg')}
       style={{ border: '1px solid #e9e9eb', boxShadow: '0px 3px 15px 0px rgba(0,0,0,0.15)' }}>
       <div className="flex items-end gap-2 pt-3 pb-3 pl-4 pr-3">
-        <textarea ref={ref} rows={1} value={v}
+        <textarea ref={ref} rows={1} value={v} disabled={busy}
           onChange={e => { setV(e.target.value); grow(); }}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder={placeholder}
-          className="flex-1 min-w-0 resize-none bg-transparent text-[14px] font-normal leading-6 outline-none block"
+          placeholder={busy ? 'Refining…' : placeholder}
+          className="flex-1 min-w-0 resize-none bg-transparent text-[14px] font-normal leading-6 outline-none block disabled:opacity-60"
           style={{ color: '#19202f', caretColor: '#19202f', maxHeight: '160px' }} />
-        <button type="button" onClick={send} disabled={!canSend}
-          className="flex items-center justify-center w-6 h-6 rounded-full transition-all flex-shrink-0"
-          style={canSend ? { backgroundColor: ACCENT, color: '#fff' } : { backgroundColor: '#f0f0f3', color: '#818ea9' }}>
-          <ArrowUp className="w-3.5 h-3.5" />
-        </button>
+        {busy ? (
+          onStop ? (
+            <button type="button" onClick={onStop} title="Stop"
+              className="flex items-center justify-center w-6 h-6 rounded-full transition-all flex-shrink-0"
+              style={{ backgroundColor: ACCENT, color: '#fff' }}>
+              <Square className="w-2.5 h-2.5" fill="currentColor" />
+            </button>
+          ) : (
+            <span className="flex items-center justify-center w-6 h-6 rounded-full flex-shrink-0"
+              style={{ backgroundColor: '#f0f0f3', color: '#818ea9' }}>
+              <Spinner className="animate-spin" style={{ width: 14, height: 14 }} />
+            </span>
+          )
+        ) : (
+          <button type="button" onClick={send} disabled={!canSend}
+            className="flex items-center justify-center w-6 h-6 rounded-full transition-all flex-shrink-0"
+            style={canSend ? { backgroundColor: ACCENT, color: '#fff' } : { backgroundColor: '#f0f0f3', color: '#818ea9' }}>
+            <ArrowUp className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
       <div className={cn('absolute inset-0 pointer-events-none', singleLine ? 'rounded-full' : 'rounded-lg')}
         style={{ boxShadow: 'inset 0px 0px 2px 0px rgba(0,0,0,0.1), inset 0px 0px 2px 0px rgba(0,96,255,0.03)' }} />
@@ -269,6 +386,63 @@ function Composer({ placeholder = 'Ask the builder to change something…', onSe
 // Assistant message — borderless 14px/1.8 text, matching the playground.
 function AssistantBubble({ children }: { children: React.ReactNode }) {
   return <div className="text-[14px] font-normal leading-[1.8]" style={{ color: '#19202f' }}>{children}</div>;
+}
+
+// The "thinking" phase — shown between send and the diff proposal. `steps` reveals
+// scripted reasoning lines that check off; `minimal` is a bare spinner baseline.
+function ThinkingBlock({ job, wait }: { job: RefineJob; wait: RefineWaitConfig }) {
+  const estSec = Math.round(wait.latencyMs / 1000);
+  if (wait.style === 'minimal') {
+    return (
+      <AssistantBubble>
+        <div className="flex items-center gap-2.5 py-1">
+          <Spinner className="animate-spin" style={{ width: 16, height: 16, color: ACCENT }} />
+          <span className="text-[13px] text-[#5b6579]">Refining…</span>
+          {wait.showElapsed && (
+            <span className="ml-auto text-[12px] tabular-nums text-[#818ea9]">{fmtElapsed(job.elapsedSec)}</span>
+          )}
+        </div>
+      </AssistantBubble>
+    );
+  }
+  return (
+    <AssistantBubble>
+      <div className="flex items-center gap-2 mb-2.5">
+        <span className="text-[13px] font-medium text-[#5b6579]">Refining this agent</span>
+        {wait.showElapsed && (
+          <span className="ml-auto text-[12px] tabular-nums text-[#818ea9]">
+            {fmtElapsed(job.elapsedSec)}<span className="opacity-60"> / ~{fmtElapsed(estSec)}</span>
+          </span>
+        )}
+      </div>
+      <div className="flex flex-col gap-2">
+        {REFINE_STEPS.map((label, i) => {
+          const state = i < job.activeStep ? 'done' : i === job.activeStep ? 'active' : 'todo';
+          return (
+            <div key={i} className="flex items-center gap-2.5">
+              <span className="w-4 h-4 shrink-0 flex items-center justify-center">
+                {state === 'done' ? (
+                  <span className="w-4 h-4 rounded-full flex items-center justify-center" style={{ backgroundColor: ADD_BG, color: ADD_TEXT }}>
+                    <Check size={11} />
+                  </span>
+                ) : state === 'active' ? (
+                  <Spinner className="animate-spin" style={{ width: 14, height: 14, color: ACCENT }} />
+                ) : (
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#D1D5DB' }} />
+                )}
+              </span>
+              <span className={cn(
+                'text-[13px] transition-colors',
+                state === 'done' ? 'text-[#5b6579]' : state === 'active' ? 'text-[#19202f] font-medium motion-safe:animate-pulse' : 'text-[#B6BECC]',
+              )}>
+                {label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </AssistantBubble>
+  );
 }
 
 // User message — the playground bubble (14px/1.8, asymmetric 24px radius,
@@ -437,16 +611,18 @@ function EmptyState() {
 
 // ─── Chat + diff review drawer ───────────────────────────────────────────────
 
-function ChatDiffDrawer({ cfg, onClose }: { cfg: AgentConfigState; onClose: () => void }) {
+function ChatDiffDrawer({ cfg, onClose, job, wait }: { cfg: AgentConfigState; onClose: () => void; job: RefineJob; wait: RefineWaitConfig }) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-  // The panel opens empty; sending any message switches to the mocked conversation.
-  const [submitted, setSubmitted] = useState(false);
   const refs = useThreadRefs([]);
   const changes = buildProposal(cfg).filter(c => !dismissed.has(c.key));
   const dismiss = (k: string) => setDismissed(p => new Set(p).add(k));
   const acceptAll = () => changes.forEach(c => c.apply());
   const dismissAll = () => setDismissed(p => { const n = new Set(p); changes.forEach(c => n.add(c.key)); return n; });
-  const isEmpty = !submitted;
+  // The panel opens empty; sending starts a refine job (thinking → done). The job
+  // lives in the parent, so it survives this panel unmounting on close.
+  const isIdle = job.phase === 'idle';
+  const isThinking = job.phase === 'thinking';
+  const isDone = job.phase === 'done';
 
   // Right-aligned per-change actions: ghost Dismiss + a plain outlined Accept.
   const actions = (c: FieldChange) => (
@@ -460,11 +636,14 @@ function ChatDiffDrawer({ cfg, onClose }: { cfg: AgentConfigState; onClose: () =
 
   return (
     <SidePanelShell title="Agent Builder" onClose={onClose}>
-      {isEmpty ? (
+      {isIdle ? (
         <EmptyState />
       ) : (
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-5">
         <UserBubble>{BUILDER_GOAL}<ReferencedThreads threads={INITIAL_REF_THREADS} /></UserBubble>
+        {isThinking ? (
+          <ThinkingBlock job={job} wait={wait} />
+        ) : (
         <AssistantBubble>
           <p className="mb-3">Here&apos;s what I&apos;d change to do that. I can apply these myself, but I&apos;ll wait for you to review:</p>
           {changes.length === 0 ? (
@@ -482,10 +661,11 @@ function ChatDiffDrawer({ cfg, onClose }: { cfg: AgentConfigState; onClose: () =
             </div>
           )}
         </AssistantBubble>
+        )}
       </div>
       )}
       <div className="px-4 py-3 shrink-0 flex flex-col gap-2.5">
-        {!isEmpty && changes.length > 0 && (
+        {isDone && changes.length > 0 && (
           <div className="flex items-center justify-between gap-2 rounded-xl px-3 py-2" style={{ backgroundColor: '#F1F0F5' }}>
             <span className="text-[13px] font-medium text-[#5b6579]">{changes.length} Suggestion{changes.length === 1 ? '' : 's'}</span>
             <div className="flex items-center gap-1.5">
@@ -496,7 +676,7 @@ function ChatDiffDrawer({ cfg, onClose }: { cfg: AgentConfigState; onClose: () =
             </div>
           </div>
         )}
-        <Composer onSend={() => setSubmitted(true)} />
+        <Composer onSend={job.start} busy={isThinking} onStop={wait.allowStop ? job.stop : undefined} />
         <ThreadRefBar refs={refs} />
       </div>
     </SidePanelShell>
@@ -507,9 +687,11 @@ function ChatDiffDrawer({ cfg, onClose }: { cfg: AgentConfigState; onClose: () =
 
 // Docked side panel — rendered as a flex sibling in the command-center row so it
 // pushes the content left rather than overlaying it.
-export function BuilderSidePanel({ open, onClose, cfg }: {
-  open: boolean; onClose: () => void; cfg: AgentConfigState;
+export function BuilderSidePanel({ open, onClose, cfg, job, wait }: {
+  open: boolean; onClose: () => void; cfg: AgentConfigState; job: RefineJob; wait: RefineWaitConfig;
 }) {
+  // Returns null when closed — but the refine `job` lives in the parent, so a
+  // running refine keeps ticking in the background and resumes when reopened.
   if (!open) return null;
-  return <ChatDiffDrawer cfg={cfg} onClose={onClose} />;
+  return <ChatDiffDrawer cfg={cfg} onClose={onClose} job={job} wait={wait} />;
 }
