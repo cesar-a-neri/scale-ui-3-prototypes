@@ -17,9 +17,11 @@ stack** — Next.js App Router + Tailwind v4, consuming the shared **SGP top nav
 
 | File | Role |
 |---|---|
+| `CLAUDE.md` | **Read first if you're an AI coding agent.** How to consume this bundle — respect Tailwind classes + JSX structure, ignore prototyping hooks and hard-coded/mock values. |
 | `src/app/golden-agent/page.tsx` | Route. Wires the catalog ↔ command-center views, sets the purple accent CSS vars, mounts the Tweakpane harness (incl. this handoff button). |
 | `src/components/agentex-cicd/agentex-cicd.tsx` | Agent **catalog** — grid/table of agents, search, status chips. Entry point. |
 | `src/components/agentex-cicd/customizable-agents.tsx` | The **Command Center** — sidebar (threads + agent picker + config), chat playground, and the config surfaces (instructions editor, model/harness, capabilities, integrations, versions). |
+| `src/components/agentex-cicd/chat-files.tsx` | **Unified file rendering & management** — inline file chips/thumbnails in messages, the agent-wide Files manager (grouped-folder tree, multiselect + bulk actions), drag-and-drop upload modal, and full-screen lightbox. |
 | `src/components/sgp-nav/sgp-nav.tsx` | Shared SGP top navigation (`NavV3`) + icon/description density contexts. |
 
 ScaleUI3 components (buttons, inputs, etc.) are **not** bundled — in production

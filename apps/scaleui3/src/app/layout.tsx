@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
   title: 'Scale UI 3 Prototypes',
-  description: 'ScaleUI3 prototypes with a shared ⌘K command palette.',
+  description: 'Interactive design prototype.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

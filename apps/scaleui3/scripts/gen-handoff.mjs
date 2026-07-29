@@ -38,10 +38,14 @@ const BUNDLES = [
     label: 'Golden Agent',
     target: 'src/components/agentex-cicd/handoff/sources.generated.ts',
     files: [
+      // Note: disk path is CLAUDE.handoff.md so it isn't auto-loaded as repo
+      // instructions here; it lands as CLAUDE.md at the root of the exported zip.
+      ['src/components/agentex-cicd/handoff/CLAUDE.handoff.md', 'CLAUDE.md'],
       ['src/components/agentex-cicd/HANDOFF.md', 'HANDOFF.md'],
       ['src/app/golden-agent/page.tsx', 'src/app/golden-agent/page.tsx'],
       ['src/components/agentex-cicd/agentex-cicd.tsx', 'src/components/agentex-cicd/agentex-cicd.tsx'],
       ['src/components/agentex-cicd/customizable-agents.tsx', 'src/components/agentex-cicd/customizable-agents.tsx'],
+      ['src/components/agentex-cicd/chat-files.tsx', 'src/components/agentex-cicd/chat-files.tsx'],
       ['src/components/sgp-nav/sgp-nav.tsx', 'src/components/sgp-nav/sgp-nav.tsx'],
     ],
   },

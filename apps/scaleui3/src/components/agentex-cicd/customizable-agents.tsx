@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -11,12 +11,17 @@ import {
   PanelLeftClose, PanelLeftOpen, Pencil, Trash2, SlidersHorizontal, PanelLeft, ArrowUp, Box, ChevronDown,
   Heading1, Heading2, Heading3, Bold, Italic, List, ListOrdered, Code, Quote, Minus, Table, ChevronDown as ChevronDownSm,
   ArrowLeft, Check, CalendarClock, TriangleAlert, CircleCheck,
+  Paperclip, Files as FilesIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
 import { ScheduledTasks, type ScheduledVariant, type ScheduleFormError } from './scheduled-tasks';
 import { toast } from 'sonner';
 import { BuilderSidePanel, BuilderCTA, useRefineJob, buildProposal, DEFAULT_REFINE_WAIT, type AgentConfigState, type RefineWaitConfig } from './agent-builder';
+import {
+  InlineFiles, UploadModal, Lightbox, FilesManager, FileTypeTile,
+  type ChatFile, type FileFolder,
+} from './chat-files';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -185,27 +190,47 @@ interface ChatMessage {
   name?: string;
   query?: string;
   result?: string;
+  files?: ChatFile[];
 }
 
 const MOCK_MESSAGES: ChatMessage[] = [
-  { id: '1', role: 'user', content: 'What are the top enterprise AI trends for 2025?' },
+  { id: '1', role: 'user', content: 'What are the top enterprise AI trends for 2025? I pulled together last year\'s outlook and our market map to work from.',
+    files: [
+      { id: 'f-t1-1', name: 'Enterprise-AI-Outlook-2024.pdf', kind: 'pdf', size: '2.4 MB', origin: 'user', meta: '18 pages · PDF', date: 'Today' },
+      { id: 'f-t1-2', name: 'market-map.png', kind: 'image', size: '640 KB', origin: 'user', gradient: 'linear-gradient(135deg,#714DFF 0%,#9F7AEA 55%,#F5F3FF 100%)', date: 'Today' },
+    ] },
   { id: '2', role: 'tool', name: 'Sandbox created', query: '15 tools', result: 'Worked for 2m 4s' },
-  { id: '3', role: 'assistant', content: 'Based on my research across 8 sources, here are the dominant enterprise AI trends for 2025:\n\n**1. Agentic AI Systems** — Organizations are moving beyond chatbots to fully autonomous agents that complete multi-step tasks with minimal oversight.\n\n**2. AI Governance Frameworks** — Legal and compliance teams are establishing internal AI usage policies.\n\n**3. Domain-Specific Models** — Vertical AI tailored to healthcare, legal, and finance is outperforming general models in specialized tasks.\n\nWould you like me to expand on any of these?' },
+  { id: '3', role: 'assistant', content: 'Based on my research across 8 sources, here are the dominant enterprise AI trends for 2025:\n\n**1. Agentic AI Systems** — Organizations are moving beyond chatbots to fully autonomous agents that complete multi-step tasks with minimal oversight.\n\n**2. AI Governance Frameworks** — Legal and compliance teams are establishing internal AI usage policies.\n\n**3. Domain-Specific Models** — Vertical AI tailored to healthcare, legal, and finance is outperforming general models in specialized tasks.\n\nI\'ve compiled the full write-up, a forecast chart, and the underlying scores below.',
+    files: [
+      { id: 'f-t1-3', name: 'AI-Trends-2025-Summary.docx', kind: 'doc', size: '88 KB', origin: 'agent', meta: '6 pages · Document', date: 'Today' },
+      { id: 'f-t1-4', name: 'trends-forecast.png', kind: 'image', size: '512 KB', origin: 'agent', gradient: 'linear-gradient(135deg,#0E7490 0%,#22D3EE 60%,#ECFEFF 100%)', date: 'Today' },
+      { id: 'f-t1-5', name: 'trend-scores.xlsx', kind: 'sheet', size: '31 KB', origin: 'agent', meta: '1,204 rows · Spreadsheet', date: 'Today' },
+    ] },
 ];
 
 const MOCK_MESSAGES_T2: ChatMessage[] = [
-  { id: '1', role: 'user', content: 'Summarize the key differences between OpenAI and Anthropic as enterprise AI providers.' },
+  { id: '1', role: 'user', content: 'Summarize the key differences between OpenAI and Anthropic as enterprise AI providers.',
+    files: [{ id: 'f-t2-1', name: 'provider-logos.png', kind: 'image', size: '210 KB', origin: 'user', gradient: 'linear-gradient(135deg,#1F2937 0%,#4B5563 100%)', date: 'Yesterday' }] },
   { id: '2', role: 'tool', name: 'Sandbox created', query: '22 tools', result: 'Worked for 3m 17s' },
   { id: '3', role: 'assistant', content: 'Here\'s a comparative analysis of OpenAI and Anthropic for enterprise use:\n\n**Safety & Alignment**\n- **Anthropic** is founded on Constitutional AI principles, with a strong emphasis on safety research and interpretability. Claude models are designed to be helpful, harmless, and honest.\n- **OpenAI** has a broader product focus, with GPT-4o optimized heavily for capability and speed.\n\n**Enterprise Offerings**\n- **OpenAI** offers ChatGPT Enterprise, Azure OpenAI Service, and a broad API ecosystem with wide ISV adoption.\n- **Anthropic** provides Claude via API and AWS Bedrock, with growing enterprise traction particularly in regulated industries.\n\n**Context Window**\n- Both providers offer 200k+ token context windows in their flagship models as of 2025.\n\n**Pricing**\n- Anthropic\'s Claude Sonnet sits at a similar price point to GPT-4o for input/output tokens, with Haiku offering a cheaper tier for high-volume tasks.\n\nWant me to pull recent analyst reports comparing customer satisfaction scores?' },
   { id: '4', role: 'user', content: 'Yes, and include any publicly available retention or NPS data if you can find it.' },
   { id: '5', role: 'tool', name: 'Sandbox created', query: '9 tools', result: 'Worked for 1m 42s' },
-  { id: '6', role: 'assistant', content: 'I found limited public NPS data, but here\'s what\'s available:\n\n- **G2 ratings (Q1 2025):** Claude scores 4.7/5 across 1,200+ reviews; ChatGPT Enterprise scores 4.5/5 across 3,400+ reviews.\n- **Redpoint Future of AI survey (2024):** 68% of enterprise buyers reported Anthropic as their "preferred safety-first vendor" vs. 41% for OpenAI in regulated sectors.\n- No verified public NPS figures from either company as of this research.\n\nI\'d recommend requesting analyst access to Forrester\'s 2025 AI Platform Wave for deeper retention benchmarks.' },
+  { id: '6', role: 'assistant', content: 'I found limited public NPS data, but here\'s what\'s available:\n\n- **G2 ratings (Q1 2025):** Claude scores 4.7/5 across 1,200+ reviews; ChatGPT Enterprise scores 4.5/5 across 3,400+ reviews.\n- **Redpoint Future of AI survey (2024):** 68% of enterprise buyers reported Anthropic as their "preferred safety-first vendor" vs. 41% for OpenAI in regulated sectors.\n- No verified public NPS figures from either company as of this research.\n\nI\'ve attached a one-page brief and the raw ratings export.',
+    files: [
+      { id: 'f-t2-2', name: 'OpenAI-vs-Anthropic-brief.pdf', kind: 'pdf', size: '1.1 MB', origin: 'agent', meta: '4 pages · PDF', date: 'Yesterday' },
+      { id: 'f-t2-3', name: 'g2-ratings-export.csv', kind: 'sheet', size: '18 KB', origin: 'agent', meta: 'CSV · 4,600 rows', date: 'Yesterday' },
+    ] },
 ];
 
 const MOCK_MESSAGES_T3: ChatMessage[] = [
-  { id: '1', role: 'user', content: 'What\'s the estimated TAM for enterprise agentic AI platforms in 2025–2028?' },
+  { id: '1', role: 'user', content: 'What\'s the estimated TAM for enterprise agentic AI platforms in 2025–2028? Here\'s our working model.',
+    files: [{ id: 'f-t3-1', name: 'tam-model.xlsx', kind: 'sheet', size: '156 KB', origin: 'user', meta: 'Spreadsheet · 8 tabs', date: 'Jun 23' }] },
   { id: '2', role: 'tool', name: 'Sandbox created', query: '18 tools', result: 'Worked for 2m 55s' },
-  { id: '3', role: 'assistant', content: 'Here\'s the market sizing landscape for enterprise agentic AI platforms:\n\n**Total Addressable Market (TAM)**\n- IDC projects the agentic AI software market will reach **$47B by 2027**, growing at a CAGR of ~43%.\n- Gartner estimates that by 2028, **33% of enterprise software applications** will include agentic AI capabilities, up from less than 1% in 2024.\n\n**Key Segments**\n| Segment | 2025 Est. | 2028 Est. |\n|---|---|---|\n| AI agent platforms | $4.2B | $18.7B |\n| Orchestration & tooling | $1.8B | $9.1B |\n| Vertical agent apps | $2.9B | $19.2B |\n\n**Top Verticals by Spend**\n1. Financial services (compliance automation, research)\n2. Healthcare (clinical decision support, admin workflows)\n3. Legal & professional services\n\nShould I break down competitive landscape by platform vendor?' },
+  { id: '3', role: 'assistant', content: 'Here\'s the market sizing landscape for enterprise agentic AI platforms:\n\n**Total Addressable Market (TAM)**\n- IDC projects the agentic AI software market will reach **$47B by 2027**, growing at a CAGR of ~43%.\n- Gartner estimates that by 2028, **33% of enterprise software applications** will include agentic AI capabilities, up from less than 1% in 2024.\n\n**Key Segments**\n| Segment | 2025 Est. | 2028 Est. |\n|---|---|---|\n| AI agent platforms | $4.2B | $18.7B |\n| Orchestration & tooling | $1.8B | $9.1B |\n| Vertical agent apps | $2.9B | $19.2B |\n\n**Top Verticals by Spend**\n1. Financial services (compliance automation, research)\n2. Healthcare (clinical decision support, admin workflows)\n3. Legal & professional services\n\nI\'ve saved the sizing deck and segment forecast below.',
+    files: [
+      { id: 'f-t3-2', name: 'market-sizing-2025.pdf', kind: 'pdf', size: '3.1 MB', origin: 'agent', meta: '22 pages · PDF', date: 'Jun 23' },
+      { id: 'f-t3-3', name: 'segment-forecast.png', kind: 'image', size: '480 KB', origin: 'agent', gradient: 'linear-gradient(135deg,#EA580C 0%,#FB923C 55%,#FEF3C7 100%)', date: 'Jun 23' },
+    ] },
 ];
 
 const MOCK_MESSAGES_T4: ChatMessage[] = [
@@ -228,7 +253,8 @@ const MOCK_MESSAGES_T5: ChatMessage[] = [
 const MOCK_MESSAGES_ST1: ChatMessage[] = [
   { id: '1', role: 'user', content: "Check today's Granola notes, summarize key follow-ups, and send me a Slack DM." },
   { id: '2', role: 'tool', name: 'Sandbox created', query: '6 tools', result: 'Worked for 1m 08s' },
-  { id: '3', role: 'assistant', content: "Here's your daily follow-up summary from today's Granola notes (3 meetings):\n\n**Acme Corp — Renewal sync**\n- Send updated pricing proposal by Thursday\n- Loop in legal on the revised MSA terms\n\n**Weekly eng standup**\n- Unblock the data pipeline migration (owner: Priya)\n- Decision needed on Postgres vs. ClickHouse by Friday\n\n**1:1 with Jordan**\n- Share the Q3 roadmap draft for feedback\n\n✅ I've sent this summary to you as a Slack DM. Want me to create calendar reminders for the time-sensitive items?" },
+  { id: '3', role: 'assistant', content: "Here's your daily follow-up summary from today's Granola notes (3 meetings):\n\n**Acme Corp — Renewal sync**\n- Send updated pricing proposal by Thursday\n- Loop in legal on the revised MSA terms\n\n**Weekly eng standup**\n- Unblock the data pipeline migration (owner: Priya)\n- Decision needed on Postgres vs. ClickHouse by Friday\n\n**1:1 with Jordan**\n- Share the Q3 roadmap draft for feedback\n\n✅ I've sent this summary to you as a Slack DM, and attached it as a doc below.",
+    files: [{ id: 'f-st1-1', name: 'granola-followups.docx', kind: 'doc', size: '42 KB', origin: 'agent', meta: '2 pages · Document', date: 'Today' }] },
 ];
 
 const MOCK_MESSAGES_ST2: ChatMessage[] = [
@@ -257,6 +283,31 @@ const ALL_THREAD_MESSAGES: Record<string, ChatMessage[]> = {
   t4: MOCK_MESSAGES_T4,
   t5: MOCK_MESSAGES_T5,
 };
+
+// The agent's files are organized into a nested folder structure (2 levels here).
+const FILE_FOLDERS: FileFolder[] = [
+  { id: 'research', name: 'Research', parentId: null },
+  { id: 'trends', name: 'Trends 2025', parentId: 'research' },
+  { id: 'market', name: 'Market Sizing', parentId: 'research' },
+  { id: 'competitive', name: 'Competitive Analysis', parentId: null },
+  { id: 'meetings', name: 'Meeting Notes', parentId: null },
+];
+
+// Which folder each mock file lives in (unmapped files fall to the root).
+const FILE_FOLDER: Record<string, string> = {
+  'f-t1-1': 'trends', 'f-t1-2': 'trends', 'f-t1-3': 'trends', 'f-t1-4': 'trends', 'f-t1-5': 'trends',
+  'f-t3-1': 'market', 'f-t3-2': 'market', 'f-t3-3': 'market',
+  'f-t2-1': 'competitive', 'f-t2-2': 'competitive', 'f-t2-3': 'competitive',
+  'f-st1-1': 'meetings',
+};
+
+// The Files view is scoped to the AGENT, not a single thread: flatten every
+// file shared across all of the agent's conversations, tagging each with its
+// source thread + containing folder so the aggregated views can organize them.
+const AGENT_FILES: ChatFile[] = Object.entries(ALL_THREAD_MESSAGES).flatMap(([threadId, msgs]) => {
+  const title = THREADS.find(t => t.id === threadId)?.title ?? '';
+  return msgs.flatMap(m => (m.files ?? []).map(f => ({ ...f, thread: f.thread ?? title, folderId: f.folderId ?? FILE_FOLDER[f.id] ?? null })));
+});
 
 // ─── Shared UI atoms ──────────────────────────────────────────────────────────
 
@@ -630,11 +681,42 @@ const VersionHistory = () => {
 
 // ─── Chat Playground ──────────────────────────────────────────────────────────
 
-const ChatPlayground = ({ messages = MOCK_MESSAGES }: { messages?: ChatMessage[] }) => {
+const ChatPlayground = ({ messages = MOCK_MESSAGES, threadTitle, navFilesOpen = false }: { messages?: ChatMessage[]; threadTitle?: string; navFilesOpen?: boolean }) => {
   const [input, setInput] = useState('');
   const [singleLine, setSingleLine] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // ── File feature state ──
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const [uploaded, setUploaded] = useState<ChatFile[]>([]);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [lightboxFile, setLightboxFile] = useState<ChatFile | null>(null);
+
+  const fileActions = useMemo(() => ({
+    onExpand: (f: ChatFile) => setLightboxFile(f),
+    onDownload: (f: ChatFile) => toast.success(`Downloading ${f.name}`),
+    onRemove: (f: ChatFile) => {
+      setRemoved(prev => new Set(prev).add(f.id));
+      setUploaded(prev => prev.filter(x => x.id !== f.id));
+    },
+  }), []);
+
+  const vis = (files?: ChatFile[]) => (files ?? []).filter(f => !removed.has(f.id));
+  // Agent-wide aggregation: every file across all conversations, plus uploads,
+  // minus anything removed. Independent of the currently-open thread.
+  const allFiles = useMemo(
+    () => [...AGENT_FILES, ...uploaded].filter(f => !removed.has(f.id)),
+    [uploaded, removed],
+  );
+  const handleUploadComplete = (files: ChatFile[]) => {
+    const tagged = files.map(f => ({ ...f, thread: threadTitle ?? f.thread }));
+    setUploaded(prev => [...prev, ...tagged]);
+  };
+  const pending = uploaded.filter(f => !removed.has(f.id));
+
+  // The file manager opens from the left-nav "Files" entry.
+  const filesSurface = navFilesOpen;
 
   useEffect(() => { bottomRef.current?.scrollIntoView(); }, [messages]);
 
@@ -651,7 +733,12 @@ const ChatPlayground = ({ messages = MOCK_MESSAGES }: { messages?: ChatMessage[]
   const canSend = input.trim().length > 0;
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-white">
+    <div className="flex h-full min-h-0 bg-white">
+     <div className="flex flex-col flex-1 min-w-0">
+      {filesSurface ? (
+        <FilesManager files={allFiles} folders={FILE_FOLDERS} on={fileActions} onUpload={() => setUploadOpen(true)} />
+      ) : (
+       <>
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-[640px] mx-auto px-8 py-6 flex flex-col gap-6">
@@ -664,16 +751,19 @@ const ChatPlayground = ({ messages = MOCK_MESSAGES }: { messages?: ChatMessage[]
             if (msg.role === 'user') return (
               <div key={msg.id} className="flex flex-col items-end gap-2">
                 <span className="text-[13px] font-normal" style={{ color: '#818ea9' }}>You</span>
-                <div className="px-3 py-2.5 text-[14px] font-normal leading-[1.8]"
-                  style={{
-                    backgroundColor: '#fcfcfc',
-                    border: '1px solid #e9e9eb',
-                    borderRadius: '24px 24px 2px 24px',
-                    color: '#19202f',
-                    maxWidth: '75%',
-                  }}>
-                  {msg.content}
-                </div>
+                {vis(msg.files).length > 0 && <InlineFiles files={vis(msg.files)} on={fileActions} align="right" />}
+                {msg.content && (
+                  <div className="px-3 py-2.5 text-[14px] font-normal leading-[1.8]"
+                    style={{
+                      backgroundColor: '#fcfcfc',
+                      border: '1px solid #e9e9eb',
+                      borderRadius: '24px 24px 2px 24px',
+                      color: '#19202f',
+                      maxWidth: '75%',
+                    }}>
+                    {msg.content}
+                  </div>
+                )}
               </div>
             );
             if (msg.role === 'tool') {
@@ -735,6 +825,7 @@ const ChatPlayground = ({ messages = MOCK_MESSAGES }: { messages?: ChatMessage[]
                     td: ({ children }) => <td className="border border-[#D1DAEB] px-2 py-1">{children}</td>,
                   }}>{msg.content}</ReactMarkdown>
                 </div>
+                {vis(msg.files).length > 0 && <InlineFiles files={vis(msg.files)} on={fileActions} align="left" showOrigin />}
               </div>
             );
           })}
@@ -744,8 +835,24 @@ const ChatPlayground = ({ messages = MOCK_MESSAGES }: { messages?: ChatMessage[]
 
       {/* Input */}
       <div className="py-5 max-w-[640px] mx-auto w-full px-8">
+        {pending.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {pending.map(f => (
+              <div key={f.id} className="flex items-center gap-2 pl-1.5 pr-1 py-1 rounded-lg bg-white" style={{ border: '1px solid #e9e9eb' }}>
+                <FileTypeTile kind={f.kind} size={26} />
+                <span className="text-[12px] font-medium text-[#19202f] max-w-[160px] truncate">{f.name}</span>
+                <button type="button" onClick={() => fileActions.onRemove(f)}
+                  className="w-5 h-5 rounded flex items-center justify-center text-[#818ea9] hover:bg-[#F0F0F3] transition-colors"><X className="w-3 h-3" /></button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className={cn('relative bg-white transition-[border-radius]', singleLine ? 'rounded-full' : 'rounded-lg')} style={{ border: '1px solid #e9e9eb', boxShadow: '0px 3px 15px 0px rgba(0,0,0,0.15)' }}>
-          <div className="flex items-end gap-2 pt-3 pb-3 pl-4 pr-3">
+          <div className={cn('flex gap-1.5 pt-3 pb-3 pl-2.5 pr-3', singleLine ? 'items-center' : 'items-end')}>
+            <button type="button" title="Attach files" onClick={() => setUploadOpen(true)}
+              className="flex items-center justify-center w-8 h-8 rounded-full shrink-0 text-[#818ea9] hover:text-[#19202f] hover:bg-[#F0F0F3] transition-colors">
+              <Paperclip className="w-4 h-4" />
+            </button>
             <textarea
               ref={inputRef}
               rows={1}
@@ -766,6 +873,12 @@ const ChatPlayground = ({ messages = MOCK_MESSAGES }: { messages?: ChatMessage[]
             style={{ boxShadow: 'inset 0px 0px 2px 0px rgba(0,0,0,0.1), inset 0px 0px 2px 0px rgba(0,96,255,0.03)' }} />
         </div>
       </div>
+       </>
+      )}
+     </div>
+
+      <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} onComplete={handleUploadComplete} />
+      <Lightbox file={lightboxFile} onClose={() => setLightboxFile(null)} onDownload={fileActions.onDownload} />
     </div>
   );
 };
@@ -806,6 +919,7 @@ const CombinedSidebar = ({
   selectedAgentId, onSelectAgent,
   onConfigOpen, onConfigClose, configOpen,
   onScheduledOpen, scheduledOpen,
+  onFilesOpen, filesOpen,
   hasChanges, onSave,
   sidebarBg = 'muted',
   onBack,
@@ -827,6 +941,8 @@ const CombinedSidebar = ({
   configOpen?: boolean;
   onScheduledOpen?: () => void;
   scheduledOpen?: boolean;
+  onFilesOpen?: () => void;
+  filesOpen?: boolean;
   hasChanges?: boolean;
   onSave?: () => void;
   sidebarBg?: 'muted' | 'white';
@@ -1041,6 +1157,18 @@ const CombinedSidebar = ({
                 </button>
               )}
 
+              {/* Files (left-nav entry point to the file manager) */}
+              {onFilesOpen && (
+                <button type="button" onClick={onFilesOpen}
+                  className="flex items-center gap-2 h-10 px-2 rounded-md transition-colors text-sm shrink-0"
+                  style={{ color: '#19202f', backgroundColor: filesOpen ? ACCENT_TINT : 'transparent' }}
+                  onMouseEnter={e => { if (!filesOpen) e.currentTarget.style.backgroundColor = '#F0F0F3'; }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = filesOpen ? ACCENT_TINT : 'transparent'; }}>
+                  <FilesIcon className="w-4 h-4 shrink-0" />
+                  Files
+                </button>
+              )}
+
               {/* Expandable search */}
               <div className="flex items-center h-10 px-2 shrink-0 overflow-hidden" style={{ marginTop: navSpacing }}>
                 {!searchOpen ? (
@@ -1082,7 +1210,7 @@ const CombinedSidebar = ({
                 {filtered.map(t => {
                   const scheduled = !!(t as { scheduled?: boolean }).scheduled;
                   const isRenaming = renamingId === t.id;
-                  const isActive = activeThread === t.id && !configOpen && !scheduledOpen;
+                  const isActive = activeThread === t.id && !configOpen && !scheduledOpen && !filesOpen;
                   const rowStyle: React.CSSProperties = isRenaming
                     ? { backgroundColor: ACCENT_MUTED }
                     : isActive
@@ -1218,6 +1346,8 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
   const [configOpen, setConfigOpen] = useState(false);
   const [scheduledOpen, setScheduledOpen] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(false);
+  // File manager opened from the left-nav entry point (the 'nav' file variant).
+  const [filesNavOpen, setFilesNavOpen] = useState(false);
   // Refine job lives here (not in the panel) so it survives the panel closing —
   // closing is view-only, the job keeps running in the background.
   const refineJob = useRefineJob(refineWait.latencyMs);
@@ -1334,13 +1464,15 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
       {/* Combined sidebar */}
       {panel === 'sidebar' && (
         <CombinedSidebar
-          activeThread={activeThread} onSelect={setActiveThread} onClose={() => setPanel(null)}
+          activeThread={activeThread} onSelect={(id) => { setActiveThread(id); setFilesNavOpen(false); }} onClose={() => setPanel(null)}
           {...configProps}
-          onConfigOpen={configMode === 'fullpage' ? () => { setConfigOpen(true); setScheduledOpen(false); } : undefined}
-          onConfigClose={configMode === 'fullpage' ? () => { setConfigOpen(false); setScheduledOpen(false); } : undefined}
+          onConfigOpen={configMode === 'fullpage' ? () => { setConfigOpen(true); setScheduledOpen(false); setFilesNavOpen(false); } : undefined}
+          onConfigClose={configMode === 'fullpage' ? () => { setConfigOpen(false); setScheduledOpen(false); setFilesNavOpen(false); } : undefined}
           configOpen={configOpen}
-          onScheduledOpen={configMode === 'fullpage' ? () => { setScheduledOpen(true); setConfigOpen(false); } : undefined}
+          onScheduledOpen={configMode === 'fullpage' ? () => { setScheduledOpen(true); setConfigOpen(false); setFilesNavOpen(false); } : undefined}
           scheduledOpen={scheduledOpen}
+          onFilesOpen={configMode === 'fullpage' ? () => { setFilesNavOpen(true); setConfigOpen(false); setScheduledOpen(false); } : undefined}
+          filesOpen={filesNavOpen}
           hasChanges={hasChanges}
           onSave={handleSave}
           selectedAgentId={selectedAgentId}
@@ -1455,7 +1587,7 @@ const CommandCenter = ({ configMode = 'fullpage', sidebarBg = 'muted', onBack, i
           </div>
         ) : (
           <div className="flex-1 min-h-0">
-            <ChatPlayground messages={threadMessages[activeThread] ?? []} />
+            <ChatPlayground messages={threadMessages[activeThread] ?? []} threadTitle={THREADS.find(t => t.id === activeThread)?.title ?? 'This conversation'} navFilesOpen={filesNavOpen} />
           </div>
         )}
 

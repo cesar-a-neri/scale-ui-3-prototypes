@@ -154,7 +154,7 @@ export default function GoldenAgentPage() {
     <ActiveDirectionProvider>
       <Toaster />
       <GoldenAgentDevPane
-        key={`${onChat && scheduledOpen ? 's' : '_'}${onChat && formOpen ? 'f' : '_'}${onChat && builderOpen ? 'b' : '_'}`}
+        key={`${onChat ? 'c' : 'd'}${onChat && scheduledOpen ? 's' : '_'}${onChat && formOpen ? 'f' : '_'}${onChat && builderOpen ? 'b' : '_'}`}
         agentPage={agentPage}
         onAgentPageChange={setAgentPage}
         showEmptyState={onChat && scheduledOpen}
